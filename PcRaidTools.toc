@@ -1,0 +1,9 @@
+## Interface: 120000
+## Title: PcRaidTools
+## Notes: A suite of tools for WoW raiding
+## Author: Pc
+## Version: 0.1.0
+## SavedVariables: PcRaidToolsDB
+
+Core.lua
+UI.lua
