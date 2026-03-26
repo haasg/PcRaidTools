@@ -17,6 +17,7 @@ eventFrame:SetScript("OnEvent", function(self, event, loadedAddon)
     PcRaidToolsDB = PcRaidToolsDB or {}
 
     PC:CreateMainWindow()
+    PC:HookMainWindowShow()
     print("|cff00ccffPcRaidTools|r v" .. PC.VERSION .. " loaded. Type |cff00ccff/pc|r to open.")
 end)
 
