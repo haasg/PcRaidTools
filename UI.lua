@@ -1,17 +1,74 @@
 local addonName, PC = ...
 
+local TAB_HEIGHT = 24
+local CONTENT_TOP = -60
+
+----------------------------------------
+-- Tab System
+----------------------------------------
+
+local tabs = {}
+local tabContents = {}
+local activeTab = nil
+
+local function CreateTab(parent, name, index)
+    local tab = CreateFrame("Button", nil, parent)
+    tab:SetSize(80, TAB_HEIGHT)
+    tab:SetPoint("TOPLEFT", 8 + (index - 1) * 84, -32)
+
+    tab.text = tab:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    tab.text:SetPoint("CENTER")
+    tab.text:SetText(name)
+
+    tab.bg = tab:CreateTexture(nil, "BACKGROUND")
+    tab.bg:SetAllPoints()
+    tab.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+
+    tab:SetScript("OnClick", function()
+        PC:SelectTab(name)
+    end)
+
+    tabs[name] = tab
+    return tab
+end
+
+local function CreateTabContent(parent)
+    local content = CreateFrame("Frame", nil, parent)
+    content:SetPoint("TOPLEFT", 12, CONTENT_TOP)
+    content:SetPoint("BOTTOMRIGHT", -12, 12)
+    content:Hide()
+    return content
+end
+
+function PC:SelectTab(name)
+    for tabName, content in pairs(tabContents) do
+        content:Hide()
+        tabs[tabName].bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+        tabs[tabName].text:SetTextColor(0.6, 0.6, 0.6)
+    end
+    tabContents[name]:Show()
+    tabs[name].bg:SetColorTexture(0.3, 0.3, 0.5, 0.9)
+    tabs[name].text:SetTextColor(1, 1, 1)
+    activeTab = name
+
+    if name == "Note" then
+        PC:RefreshNoteDisplay()
+    elseif name == "Tracker" then
+        PC:ScanAuras()
+    end
+end
+
 ----------------------------------------
 -- Main Window
 ----------------------------------------
 
 function PC:CreateMainWindow()
     local frame = CreateFrame("Frame", "PcRaidToolsMain", UIParent, "BackdropTemplate")
-    frame:SetSize(300, 400)
+    frame:SetSize(350, 450)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("MEDIUM")
     frame:SetClampedToScreen(true)
 
-    -- Backdrop
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
         edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -23,33 +80,49 @@ function PC:CreateMainWindow()
     frame:SetBackdropColor(0.1, 0.1, 0.1, 0.9)
     frame:SetBackdropBorderColor(0.4, 0.4, 0.4, 1)
 
-    -- Make draggable
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop", frame.StopMovingOrSizing)
 
-    -- Title
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    title:SetPoint("TOP", 0, -12)
+    title:SetPoint("TOP", 0, -10)
     title:SetText("|cff00ccffPcRaidTools|r")
 
-    -- Close button
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
 
-    -- Escape to close
     tinsert(UISpecialFrames, "PcRaidToolsMain")
 
-    ----------------------------------------
-    -- Spell ID Input
-    ----------------------------------------
+    -- Tabs
+    CreateTab(frame, "Tracker", 1)
+    CreateTab(frame, "Note", 2)
 
+    -- Tab content containers
+    tabContents["Tracker"] = CreateTabContent(frame)
+    tabContents["Note"] = CreateTabContent(frame)
+
+    -- Build each tab's content
+    self:BuildTrackerTab(tabContents["Tracker"])
+    self:BuildNoteTab(tabContents["Note"])
+
+    frame:Hide()
+    self.mainWindow = frame
+
+    -- Default to Tracker tab
+    self:SelectTab("Tracker")
+end
+
+----------------------------------------
+-- Tracker Tab
+----------------------------------------
+
+function PC:BuildTrackerTab(parent)
     -- Buff / Debuff toggle
-    local filterBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local filterBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     filterBtn:SetSize(70, 22)
-    filterBtn:SetPoint("TOPLEFT", 12, -38)
+    filterBtn:SetPoint("TOPLEFT", 0, 0)
     filterBtn:SetText("Debuff")
 
     local function UpdateFilterButton()
@@ -69,19 +142,18 @@ function PC:CreateMainWindow()
         UpdateFilterButton()
     end)
 
-    -- Spell ID input
-    local inputLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local inputLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     inputLabel:SetPoint("LEFT", filterBtn, "RIGHT", 8, 0)
     inputLabel:SetText("Spell ID:")
 
-    local inputBox = CreateFrame("EditBox", "PcRaidToolsSpellInput", frame, "InputBoxTemplate")
+    local inputBox = CreateFrame("EditBox", "PcRaidToolsSpellInput", parent, "InputBoxTemplate")
     inputBox:SetSize(80, 20)
     inputBox:SetPoint("LEFT", inputLabel, "RIGHT", 6, 0)
     inputBox:SetAutoFocus(false)
     inputBox:SetNumeric(true)
     inputBox:SetMaxLetters(10)
 
-    local trackBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    local trackBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     trackBtn:SetSize(60, 22)
     trackBtn:SetPoint("LEFT", inputBox, "RIGHT", 6, 0)
     trackBtn:SetText("Track")
@@ -98,36 +170,87 @@ function PC:CreateMainWindow()
         trackBtn:Click()
     end)
 
-    -- Tracking status line
-    local statusText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    statusText:SetPoint("TOPLEFT", 12, -65)
+    local statusText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    statusText:SetPoint("TOPLEFT", 0, -28)
     statusText:SetText("|cff888888No aura tracked|r")
     self.statusText = statusText
 
-    ----------------------------------------
-    -- Roster Scroll Area
-    ----------------------------------------
-
-    local rosterHeader = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    rosterHeader:SetPoint("TOPLEFT", 12, -85)
+    -- Roster header
+    local rosterHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    rosterHeader:SetPoint("TOPLEFT", 0, -46)
     rosterHeader:SetText("Raid/Party Members:")
 
-    -- Scroll frame for the roster list
-    local scrollFrame = CreateFrame("ScrollFrame", nil, frame, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 12, -102)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -30, 12)
+    -- Scroll frame
+    local scrollFrame = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 0, -62)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -18, 0)
 
     local scrollChild = CreateFrame("Frame")
-    scrollChild:SetSize(240, 1)
+    scrollChild:SetSize(280, 1)
     scrollFrame:SetScrollChild(scrollChild)
 
     self.scrollChild = scrollChild
-    self.rosterRows = {}
+end
 
-    -- Start hidden
-    frame:Hide()
+----------------------------------------
+-- Note Tab
+----------------------------------------
 
-    self.mainWindow = frame
+function PC:BuildNoteTab(parent)
+    local readBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    readBtn:SetSize(120, 22)
+    readBtn:SetPoint("TOPLEFT", 0, 0)
+    readBtn:SetText("Read MRT Note")
+    readBtn:SetScript("OnClick", function()
+        PC:ReadMRTNote()
+        PC:RefreshNoteDisplay()
+    end)
+
+    local noteStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    noteStatus:SetPoint("LEFT", readBtn, "RIGHT", 8, 0)
+    noteStatus:SetText("")
+    self.noteStatus = noteStatus
+
+    -- Scrollable text area to display the note
+    local scrollFrame = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 0, -30)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -18, 0)
+
+    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    editBox:SetMultiLine(true)
+    editBox:SetAutoFocus(false)
+    editBox:SetFontObject(GameFontHighlightSmall)
+    editBox:SetWidth(scrollFrame:GetWidth() or 280)
+    editBox:SetText("")
+    editBox:EnableMouse(true)
+    editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+    scrollFrame:SetScrollChild(editBox)
+    self.noteEditBox = editBox
+
+    -- Update width when parent resizes
+    scrollFrame:SetScript("OnSizeChanged", function(self, w)
+        editBox:SetWidth(w)
+    end)
+end
+
+function PC:RefreshNoteDisplay()
+    if not self.noteEditBox then return end
+
+    if not self:HasMRT() then
+        self.noteEditBox:SetText("MRT (Method Raid Tools) is not loaded.\nInstall MRT to use this feature.")
+        self.noteStatus:SetText("|cffff4444MRT not found|r")
+        return
+    end
+
+    local note = self:ReadMRTNote()
+    if note and note ~= "" then
+        self.noteEditBox:SetText(note)
+        self.noteStatus:SetText("|cff44ff44Note loaded (" .. #note .. " chars)|r")
+    else
+        self.noteEditBox:SetText("(Note is empty)")
+        self.noteStatus:SetText("|cffaaaaaaEmpty note|r")
+    end
 end
 
 ----------------------------------------
@@ -147,13 +270,13 @@ local function GetOrCreateRow(parent, index)
     parent.rows = parent.rows or {}
 
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(240, ROW_HEIGHT)
+    row:SetSize(280, ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -((index - 1) * ROW_HEIGHT))
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.name:SetPoint("LEFT", 4, 0)
     row.name:SetJustifyH("LEFT")
-    row.name:SetWidth(180)
+    row.name:SetWidth(220)
 
     row.indicator = row:CreateTexture(nil, "OVERLAY")
     row.indicator:SetSize(12, 12)
@@ -169,14 +292,12 @@ function PC:UpdateRosterDisplay()
 
     local scrollChild = self.scrollChild
 
-    -- Hide all existing rows
     if scrollChild.rows then
         for _, row in pairs(scrollChild.rows) do
             row:Hide()
         end
     end
 
-    -- Build sorted unit list
     local units = {}
     if IsInRaid() then
         for i = 1, GetNumGroupMembers() do
@@ -197,7 +318,6 @@ function PC:UpdateRosterDisplay()
         end
     end
 
-    -- Update status text
     if self.trackedSpellId then
         local spellName = C_Spell.GetSpellName(self.trackedSpellId)
         local label = spellName or ("ID: " .. self.trackedSpellId)
@@ -207,7 +327,6 @@ function PC:UpdateRosterDisplay()
         self.statusText:SetText("|cff888888No aura tracked|r")
     end
 
-    -- Populate rows
     for i, unit in ipairs(units) do
         local row = GetOrCreateRow(scrollChild, i)
         local name = UnitName(unit) or "Unknown"
@@ -229,14 +348,17 @@ function PC:UpdateRosterDisplay()
         row:Show()
     end
 
-    -- Update scroll child height
     scrollChild:SetHeight(#units * ROW_HEIGHT)
 end
 
 -- Refresh the display whenever the window is shown
 function PC:HookMainWindowShow()
     self.mainWindow:HookScript("OnShow", function()
-        PC:ScanAuras()
+        if activeTab == "Tracker" then
+            PC:ScanAuras()
+        elseif activeTab == "Note" then
+            PC:RefreshNoteDisplay()
+        end
     end)
 end
 

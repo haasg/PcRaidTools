@@ -6,5 +6,6 @@
 ## SavedVariables: PcRaidToolsDB
 
 Core.lua
-UI.lua
+MRTNote.lua
 DebuffTracker.lua
+UI.lua
