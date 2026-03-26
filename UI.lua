@@ -64,7 +64,7 @@ end
 
 function PC:CreateMainWindow()
     local frame = CreateFrame("Frame", "PcRaidToolsMain", UIParent, "BackdropTemplate")
-    frame:SetSize(350, 450)
+    frame:SetSize(380, 500)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("MEDIUM")
     frame:SetClampedToScreen(true)
@@ -203,9 +203,9 @@ function PC:BuildNoteTab(parent)
     local readBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     readBtn:SetSize(120, 22)
     readBtn:SetPoint("TOPLEFT", 0, 0)
-    readBtn:SetText("Read MRT Note")
+    readBtn:SetText("Read & Parse")
     readBtn:SetScript("OnClick", function()
-        PC:ReadMRTNote()
+        PC:ReadAndParseNote()
         PC:RefreshNoteDisplay()
     end)
 
@@ -214,46 +214,252 @@ function PC:BuildNoteTab(parent)
     noteStatus:SetText("")
     self.noteStatus = noteStatus
 
-    -- Scrollable text area to display the note
-    local scrollFrame = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT", 0, -30)
-    scrollFrame:SetPoint("BOTTOMRIGHT", -18, 0)
+    -- Left column: Parsed note list
+    local parsedHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    parsedHeader:SetPoint("TOPLEFT", 0, -28)
+    parsedHeader:SetText("Note List:")
 
-    local editBox = CreateFrame("EditBox", nil, scrollFrame)
+    local parsedScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+    parsedScroll:SetPoint("TOPLEFT", 0, -44)
+    parsedScroll:SetSize(150, 200)
+
+    local parsedChild = CreateFrame("Frame")
+    parsedChild:SetSize(135, 1)
+    parsedScroll:SetScrollChild(parsedChild)
+    self.parsedChild = parsedChild
+
+    -- Right column: Raid roster
+    local rosterHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    rosterHeader:SetPoint("TOPLEFT", 165, -28)
+    rosterHeader:SetText("Raid Roster:")
+
+    self.rosterCountText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    self.rosterCountText:SetPoint("LEFT", rosterHeader, "RIGHT", 4, 0)
+    self.rosterCountText:SetText("")
+
+    local rosterScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+    rosterScroll:SetPoint("TOPLEFT", 165, -44)
+    rosterScroll:SetSize(150, 200)
+
+    local rosterChild = CreateFrame("Frame")
+    rosterChild:SetSize(135, 1)
+    rosterScroll:SetScrollChild(rosterChild)
+    self.rosterChild = rosterChild
+
+    -- Raw note area (bottom)
+    local rawHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    rawHeader:SetPoint("TOPLEFT", 0, -250)
+    rawHeader:SetText("Raw Note:")
+
+    local rawScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+    rawScroll:SetPoint("TOPLEFT", 0, -266)
+    rawScroll:SetPoint("BOTTOMRIGHT", -18, 0)
+
+    local editBox = CreateFrame("EditBox", nil, rawScroll)
     editBox:SetMultiLine(true)
     editBox:SetAutoFocus(false)
     editBox:SetFontObject(GameFontHighlightSmall)
-    editBox:SetWidth(scrollFrame:GetWidth() or 280)
+    editBox:SetWidth(280)
     editBox:SetText("")
     editBox:EnableMouse(true)
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
 
-    scrollFrame:SetScrollChild(editBox)
+    rawScroll:SetScrollChild(editBox)
     self.noteEditBox = editBox
 
-    -- Update width when parent resizes
-    scrollFrame:SetScript("OnSizeChanged", function(self, w)
+    rawScroll:SetScript("OnSizeChanged", function(self, w)
         editBox:SetWidth(w)
     end)
 end
 
-function PC:RefreshNoteDisplay()
-    if not self.noteEditBox then return end
+local NOTE_ROW_HEIGHT = 18
 
+local function GetOrCreateNoteRow(parent, index)
+    parent.rows = parent.rows or {}
+    if parent.rows[index] then
+        return parent.rows[index]
+    end
+
+    local row = CreateFrame("Frame", nil, parent)
+    row:SetSize(280, NOTE_ROW_HEIGHT)
+    row:SetPoint("TOPLEFT", 0, -((index - 1) * NOTE_ROW_HEIGHT))
+
+    row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.text:SetPoint("LEFT", 18, 0)
+    row.text:SetJustifyH("LEFT")
+    row.text:SetWidth(250)
+
+    row.icon = row:CreateTexture(nil, "OVERLAY")
+    row.icon:SetSize(12, 12)
+    row.icon:SetPoint("LEFT", 2, 0)
+
+    parent.rows[index] = row
+    return row
+end
+
+local function HideAllRows(container)
+    if container.rows then
+        for _, row in pairs(container.rows) do
+            row:Hide()
+        end
+    end
+end
+
+function PC:RefreshNoteDisplay()
+    local parsedChild = self.parsedChild
+    local rosterChild = self.rosterChild
+    if not parsedChild or not rosterChild then return end
+
+    HideAllRows(parsedChild)
+    HideAllRows(rosterChild)
+
+    -- Always refresh raid roster
+    self:RefreshRosterList()
+
+    -- Status
     if not self:HasMRT() then
-        self.noteEditBox:SetText("MRT (Method Raid Tools) is not loaded.\nInstall MRT to use this feature.")
         self.noteStatus:SetText("|cffff4444MRT not found|r")
+        self.noteEditBox:SetText("MRT (Method Raid Tools) is not loaded.\nInstall MRT to use this feature.")
         return
     end
 
-    local note = self:ReadMRTNote()
-    if note and note ~= "" then
-        self.noteEditBox:SetText(note)
-        self.noteStatus:SetText("|cff44ff44Note loaded (" .. #note .. " chars)|r")
+    -- Raw note display
+    if self.lastNoteText and self.lastNoteText ~= "" then
+        self.noteEditBox:SetText(self.lastNoteText)
     else
         self.noteEditBox:SetText("(Note is empty)")
-        self.noteStatus:SetText("|cffaaaaaaEmpty note|r")
     end
+
+    -- Show errors if any
+    if #self.parseErrors > 0 and not self.parsedSpellId and #self.parsedPlayers == 0 then
+        self.noteStatus:SetText("|cffff4444Parse failed|r")
+        local row = GetOrCreateNoteRow(parsedChild, 1)
+        row.text:SetText("|cffff4444" .. self.parseErrors[1] .. "|r")
+        row.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-NotReady")
+        row.icon:Show()
+        row:Show()
+        parsedChild:SetHeight(NOTE_ROW_HEIGHT)
+        return
+    end
+
+    -- Spell ID row
+    local rowIdx = 1
+    local spellRow = GetOrCreateNoteRow(parsedChild, rowIdx)
+    if self.parsedSpellId then
+        local spellName = C_Spell.GetSpellName(self.parsedSpellId)
+        local label = spellName and (spellName .. " (" .. self.parsedSpellId .. ")") or tostring(self.parsedSpellId)
+        spellRow.text:SetText("|cffffcc00" .. label .. "|r")
+        spellRow.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
+    else
+        spellRow.text:SetText("|cff888888No spell ID|r")
+        spellRow.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-NotReady")
+    end
+    spellRow.icon:Show()
+    spellRow:Show()
+
+    -- Player rows
+    local warnings = 0
+    for i, entry in ipairs(self.parsedPlayers) do
+        rowIdx = rowIdx + 1
+        local row = GetOrCreateNoteRow(parsedChild, rowIdx)
+        row.text:SetText(i .. ". " .. entry.name)
+        if entry.found then
+            row.text:SetTextColor(0.3, 1, 0.3)
+            row.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
+        else
+            row.text:SetTextColor(1, 0.2, 0.2)
+            row.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-NotReady")
+            warnings = warnings + 1
+        end
+        row.icon:Show()
+        row:Show()
+    end
+
+    -- Error rows (non-player errors only)
+    for _, err in ipairs(self.parseErrors) do
+        if not err:match("^Player not found") then
+            rowIdx = rowIdx + 1
+            local row = GetOrCreateNoteRow(parsedChild, rowIdx)
+            row.text:SetText("|cffff4444" .. err .. "|r")
+            row.text:SetTextColor(1, 1, 1)
+            row.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-NotReady")
+            row.icon:Show()
+            row:Show()
+        end
+    end
+
+    parsedChild:SetHeight(rowIdx * NOTE_ROW_HEIGHT)
+
+    -- Update status
+    if warnings > 0 then
+        self.noteStatus:SetText("|cffffaa00Parsed with " .. warnings .. " warning(s)|r")
+    elseif #self.parsedPlayers > 0 then
+        self.noteStatus:SetText("|cff44ff44Parsed OK - " .. #self.parsedPlayers .. " players|r")
+    else
+        self.noteStatus:SetText("|cffaaaaaaNo data parsed|r")
+    end
+end
+
+----------------------------------------
+-- Raid Roster List
+----------------------------------------
+
+function PC:RefreshRosterList()
+    local rosterChild = self.rosterChild
+    if not rosterChild then return end
+
+    HideAllRows(rosterChild)
+
+    -- Build alphabetically sorted name list
+    local names = {}
+    if IsInRaid() then
+        for i = 1, GetNumGroupMembers() do
+            local unit = "raid" .. i
+            if UnitExists(unit) then
+                local name = UnitName(unit)
+                if name then
+                    names[#names + 1] = name
+                end
+            end
+        end
+    else
+        if UnitExists("player") then
+            local name = UnitName("player")
+            if name then
+                names[#names + 1] = name
+            end
+        end
+        for i = 1, 4 do
+            local unit = "party" .. i
+            if UnitExists(unit) then
+                local name = UnitName(unit)
+                if name then
+                    names[#names + 1] = name
+                end
+            end
+        end
+    end
+
+    table.sort(names)
+
+    -- Count warning
+    local count = #names
+    if count == 20 then
+        self.rosterCountText:SetText("|cff44ff44(" .. count .. ")|r")
+    else
+        self.rosterCountText:SetText("|cffff4444(" .. count .. "/20)|r")
+    end
+
+    -- Display rows
+    for i, name in ipairs(names) do
+        local row = GetOrCreateNoteRow(rosterChild, i)
+        row.text:SetText(name)
+        row.text:SetTextColor(0.8, 0.8, 0.8)
+        row.icon:Hide()
+        row:Show()
+    end
+
+    rosterChild:SetHeight(count * NOTE_ROW_HEIGHT)
 end
 
 ----------------------------------------
