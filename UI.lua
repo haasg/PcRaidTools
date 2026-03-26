@@ -209,19 +209,39 @@ function PC:BuildNoteTab(parent)
         PC:RefreshNoteDisplay()
     end)
 
+    local activateBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    activateBtn:SetSize(80, 22)
+    activateBtn:SetPoint("LEFT", readBtn, "RIGHT", 6, 0)
+    activateBtn:SetText("Activate")
+    activateBtn:SetScript("OnClick", function()
+        if PC.dispelActive then
+            PC:DeactivateDispelMode()
+            PC:RefreshDispelStatus()
+        else
+            local success, msg = PC:ActivateDispelMode()
+            PC:RefreshDispelStatus()
+        end
+    end)
+    self.activateBtn = activateBtn
+
     local noteStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    noteStatus:SetPoint("LEFT", readBtn, "RIGHT", 8, 0)
+    noteStatus:SetPoint("TOPLEFT", 0, -26)
     noteStatus:SetText("")
     self.noteStatus = noteStatus
 
+    local dispelStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    dispelStatus:SetPoint("TOPLEFT", 0, -40)
+    dispelStatus:SetText("")
+    self.dispelStatus = dispelStatus
+
     -- Left column: Parsed note list
     local parsedHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    parsedHeader:SetPoint("TOPLEFT", 0, -28)
+    parsedHeader:SetPoint("TOPLEFT", 0, -56)
     parsedHeader:SetText("Note List:")
 
     local parsedScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    parsedScroll:SetPoint("TOPLEFT", 0, -44)
-    parsedScroll:SetSize(150, 200)
+    parsedScroll:SetPoint("TOPLEFT", 0, -72)
+    parsedScroll:SetSize(150, 175)
 
     local parsedChild = CreateFrame("Frame")
     parsedChild:SetSize(135, 1)
@@ -230,7 +250,7 @@ function PC:BuildNoteTab(parent)
 
     -- Right column: Raid roster
     local rosterHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    rosterHeader:SetPoint("TOPLEFT", 165, -28)
+    rosterHeader:SetPoint("TOPLEFT", 165, -56)
     rosterHeader:SetText("Raid Roster:")
 
     self.rosterCountText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -238,8 +258,8 @@ function PC:BuildNoteTab(parent)
     self.rosterCountText:SetText("")
 
     local rosterScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    rosterScroll:SetPoint("TOPLEFT", 165, -44)
-    rosterScroll:SetSize(150, 200)
+    rosterScroll:SetPoint("TOPLEFT", 165, -72)
+    rosterScroll:SetSize(150, 175)
 
     local rosterChild = CreateFrame("Frame")
     rosterChild:SetSize(135, 1)
@@ -460,6 +480,27 @@ function PC:RefreshRosterList()
     end
 
     rosterChild:SetHeight(count * NOTE_ROW_HEIGHT)
+end
+
+----------------------------------------
+-- Dispel Status
+----------------------------------------
+
+function PC:RefreshDispelStatus()
+    if not self.dispelStatus then return end
+    if not self.activateBtn then return end
+
+    if self.dispelActive then
+        self.activateBtn:SetText("Deactivate")
+        if self.myHealerIndex then
+            self.dispelStatus:SetText("|cff44ff44Dispel mode ON|r - You are healer #" .. self.myHealerIndex)
+        else
+            self.dispelStatus:SetText("|cffffaa00Dispel mode ON|r - You are not in the healer list")
+        end
+    else
+        self.activateBtn:SetText("Activate")
+        self.dispelStatus:SetText("|cff888888Dispel mode OFF|r")
+    end
 end
 
 ----------------------------------------

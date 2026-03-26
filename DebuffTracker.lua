@@ -72,6 +72,8 @@ local function OnEvent(self, event, ...)
             PC.auraStatus[unit] = UnitHasAura(unit, PC.trackedSpellId, PC.auraFilter)
             PC:UpdateRosterDisplay()
         end
+        -- Queue dispel assignment eval (runs once per frame max)
+        PC:QueueAssignmentEval()
     elseif event == "GROUP_ROSTER_UPDATE" then
         PC:ScanAuras()
     end
