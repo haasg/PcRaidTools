@@ -8,4 +8,5 @@
 Core.lua
 MRTNote.lua
 DebuffTracker.lua
+FrameGlow.lua
 UI.lua

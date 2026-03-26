@@ -26,6 +26,11 @@ end)
 ----------------------------------------
 
 SLASH_PCRAIDTOOLS1 = "/pc"
-SlashCmdList["PCRAIDTOOLS"] = function()
-    PC:ToggleMainWindow()
+SlashCmdList["PCRAIDTOOLS"] = function(msg)
+    local cmd = msg and msg:trim():lower() or ""
+    if cmd == "debug" then
+        PC:DebugBlizzFrames()
+    else
+        PC:ToggleMainWindow()
+    end
 end
