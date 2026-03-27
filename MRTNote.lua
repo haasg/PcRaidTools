@@ -109,5 +109,9 @@ function PC:ReadAndParseNote()
         self.parseErrors[#self.parseErrors + 1] = "Could not read MRT note."
         return false
     end
-    return self:ParseNote(text)
+    local success = self:ParseNote(text)
+    if success then
+        self:ResolveHealerIndex()
+    end
+    return success
 end

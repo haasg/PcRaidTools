@@ -209,39 +209,51 @@ function PC:BuildNoteTab(parent)
         PC:RefreshNoteDisplay()
     end)
 
-    local activateBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    activateBtn:SetSize(80, 22)
-    activateBtn:SetPoint("LEFT", readBtn, "RIGHT", 6, 0)
-    activateBtn:SetText("Activate")
-    activateBtn:SetScript("OnClick", function()
-        if PC.dispelActive then
-            PC:DeactivateDispelMode()
-            PC:RefreshDispelStatus()
-        else
-            local success, msg = PC:ActivateDispelMode()
-            PC:RefreshDispelStatus()
-        end
-    end)
-    self.activateBtn = activateBtn
-
     local noteStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    noteStatus:SetPoint("TOPLEFT", 0, -26)
+    noteStatus:SetPoint("LEFT", readBtn, "RIGHT", 8, 0)
     noteStatus:SetText("")
     self.noteStatus = noteStatus
 
+    local threshLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    threshLabel:SetPoint("TOPLEFT", 0, -28)
+    threshLabel:SetText("Threshold:")
+
+    local threshBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
+    threshBox:SetSize(30, 18)
+    threshBox:SetPoint("LEFT", threshLabel, "RIGHT", 4, 0)
+    threshBox:SetAutoFocus(false)
+    threshBox:SetNumeric(true)
+    threshBox:SetMaxLetters(2)
+    threshBox:SetText(tostring(PC.auraThreshold))
+    threshBox:SetScript("OnEnterPressed", function(self)
+        local val = tonumber(self:GetText())
+        if val and val >= 1 then
+            PC.auraThreshold = val
+        end
+        self:ClearFocus()
+    end)
+    threshBox:SetScript("OnEditFocusLost", function(self)
+        local val = tonumber(self:GetText())
+        if val and val >= 1 then
+            PC.auraThreshold = val
+        else
+            self:SetText(tostring(PC.auraThreshold))
+        end
+    end)
+
     local dispelStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    dispelStatus:SetPoint("TOPLEFT", 0, -40)
+    dispelStatus:SetPoint("LEFT", threshBox, "RIGHT", 10, 0)
     dispelStatus:SetText("")
     self.dispelStatus = dispelStatus
 
     -- Left column: Parsed note list
     local parsedHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    parsedHeader:SetPoint("TOPLEFT", 0, -56)
+    parsedHeader:SetPoint("TOPLEFT", 0, -44)
     parsedHeader:SetText("Note List:")
 
     local parsedScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    parsedScroll:SetPoint("TOPLEFT", 0, -72)
-    parsedScroll:SetSize(150, 175)
+    parsedScroll:SetPoint("TOPLEFT", 0, -60)
+    parsedScroll:SetSize(150, 185)
 
     local parsedChild = CreateFrame("Frame")
     parsedChild:SetSize(135, 1)
@@ -250,7 +262,7 @@ function PC:BuildNoteTab(parent)
 
     -- Right column: Raid roster
     local rosterHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    rosterHeader:SetPoint("TOPLEFT", 165, -56)
+    rosterHeader:SetPoint("TOPLEFT", 165, -44)
     rosterHeader:SetText("Raid Roster:")
 
     self.rosterCountText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -258,8 +270,8 @@ function PC:BuildNoteTab(parent)
     self.rosterCountText:SetText("")
 
     local rosterScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    rosterScroll:SetPoint("TOPLEFT", 165, -72)
-    rosterScroll:SetSize(150, 175)
+    rosterScroll:SetPoint("TOPLEFT", 165, -60)
+    rosterScroll:SetSize(150, 185)
 
     local rosterChild = CreateFrame("Frame")
     rosterChild:SetSize(135, 1)
@@ -418,6 +430,8 @@ function PC:RefreshNoteDisplay()
     else
         self.noteStatus:SetText("|cffaaaaaaNo data parsed|r")
     end
+
+    self:RefreshDispelStatus()
 end
 
 ----------------------------------------
@@ -488,18 +502,13 @@ end
 
 function PC:RefreshDispelStatus()
     if not self.dispelStatus then return end
-    if not self.activateBtn then return end
 
-    if self.dispelActive then
-        self.activateBtn:SetText("Deactivate")
-        if self.myHealerIndex then
-            self.dispelStatus:SetText("|cff44ff44Dispel mode ON|r - You are healer #" .. self.myHealerIndex)
-        else
-            self.dispelStatus:SetText("|cffffaa00Dispel mode ON|r - You are not in the healer list")
-        end
+    if self.myHealerIndex then
+        self.dispelStatus:SetText("|cff44ff44You are healer #" .. self.myHealerIndex .. "|r - dispels active")
+    elseif self.parsedSpellId and #self.parsedPlayers > 0 then
+        self.dispelStatus:SetText("|cffffaa00You are not in the healer list|r")
     else
-        self.activateBtn:SetText("Activate")
-        self.dispelStatus:SetText("|cff888888Dispel mode OFF|r")
+        self.dispelStatus:SetText("")
     end
 end
 
