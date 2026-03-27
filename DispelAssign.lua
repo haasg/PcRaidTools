@@ -22,7 +22,6 @@ end)
 
 -- Called from UNIT_AURA — just marks dirty and lets OnUpdate do the work
 function PC:QueueAssignmentEval()
-    if not self.parsedSpellId then return end
     if not self.myHealerIndex then return end
     if not dirty then
         dirty = true
@@ -96,7 +95,6 @@ local lastTriggerTime = 0
 local lastDebugTime = 0
 function PC:EvaluateAssignments()
     if not self.myHealerIndex then return end
-    if not self.parsedSpellId then return end
 
     local affected = self:GetAffectedPlayersSorted()
 

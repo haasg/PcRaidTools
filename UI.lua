@@ -391,7 +391,7 @@ function PC:RefreshNoteDisplay()
     end
 
     -- Show errors if any
-    if #self.parseErrors > 0 and not self.parsedSpellId and #self.parsedPlayers == 0 then
+    if #self.parseErrors > 0 and #self.parsedPlayers == 0 then
         self.noteStatus:SetText("|cffff4444Parse failed|r")
         local row = GetOrCreateNoteRow(parsedChild, 1)
         row.text:SetText("|cffff4444" .. self.parseErrors[1] .. "|r")
@@ -402,20 +402,13 @@ function PC:RefreshNoteDisplay()
         return
     end
 
-    -- Spell ID row
+    -- Threshold row
     local rowIdx = 1
-    local spellRow = GetOrCreateNoteRow(parsedChild, rowIdx)
-    if self.parsedSpellId then
-        local spellName = C_Spell.GetSpellName(self.parsedSpellId)
-        local label = spellName and (spellName .. " (" .. self.parsedSpellId .. ")") or tostring(self.parsedSpellId)
-        spellRow.text:SetText("|cffffcc00" .. label .. "|r")
-        spellRow.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
-    else
-        spellRow.text:SetText("|cff888888No spell ID|r")
-        spellRow.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-NotReady")
-    end
-    spellRow.icon:Show()
-    spellRow:Show()
+    local threshRow = GetOrCreateNoteRow(parsedChild, rowIdx)
+    threshRow.text:SetText("Threshold: |cffffcc00" .. self.auraThreshold .. "|r")
+    threshRow.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
+    threshRow.icon:Show()
+    threshRow:Show()
 
     -- Player rows
     local warnings = 0
@@ -535,7 +528,7 @@ function PC:RefreshDispelStatus()
 
     if self.myHealerIndex then
         self.dispelStatus:SetText("|cff44ff44Healer #" .. self.myHealerIndex .. "|r | Threshold: " .. self.auraThreshold)
-    elseif self.parsedSpellId and #self.parsedPlayers > 0 then
+    elseif #self.parsedPlayers > 0 then
         self.dispelStatus:SetText("|cffffaa00Not in healer list|r | Threshold: " .. self.auraThreshold)
     else
         self.dispelStatus:SetText("")

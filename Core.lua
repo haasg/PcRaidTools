@@ -49,13 +49,12 @@ SlashCmdList["PCRAIDTOOLS"] = function(msg)
         PC:DebugBlizzFrames()
     elseif cmd == "diag" then
         print("|cff00ccff[PcRaidTools Diag]|r")
-        print("  parsedSpellId: " .. tostring(PC.parsedSpellId))
         print("  auraThreshold: " .. tostring(PC.auraThreshold))
         print("  myHealerIndex: " .. tostring(PC.myHealerIndex))
         print("  currentGlowTarget: " .. tostring(PC.currentGlowTarget))
         print("  ttsEnabled: " .. tostring(PC.ttsEnabled))
         print("  parsedPlayers: " .. #PC.parsedPlayers)
-        if PC.parsedSpellId and PC.myHealerIndex then
+        if PC.myHealerIndex then
             local affected = PC:GetAffectedPlayersSorted()
             print("  affected count: " .. #affected)
             for i, name in ipairs(affected) do
