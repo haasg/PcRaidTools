@@ -306,24 +306,52 @@ end
 
 local NOTE_ROW_HEIGHT = 18
 
+local function SpeakDispel(name)
+    if C_VoiceChat and C_VoiceChat.SpeakText then
+        local rate = C_TTSSettings and C_TTSSettings.GetSpeechRate() or 0
+        C_VoiceChat.SpeakText(0, "dispel " .. name, rate, 100, true)
+    end
+end
+
 local function GetOrCreateNoteRow(parent, index)
     parent.rows = parent.rows or {}
     if parent.rows[index] then
         return parent.rows[index]
     end
 
+    local parentWidth = parent:GetWidth() or 135
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(280, NOTE_ROW_HEIGHT)
+    row:SetSize(parentWidth, NOTE_ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -((index - 1) * NOTE_ROW_HEIGHT))
 
     row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     row.text:SetPoint("LEFT", 18, 0)
     row.text:SetJustifyH("LEFT")
-    row.text:SetWidth(250)
+    row.text:SetWidth(parentWidth - 40)
 
     row.icon = row:CreateTexture(nil, "OVERLAY")
     row.icon:SetSize(12, 12)
     row.icon:SetPoint("LEFT", 2, 0)
+
+    row.ttsBtn = CreateFrame("Button", nil, row)
+    row.ttsBtn:SetSize(14, 14)
+    row.ttsBtn:SetPoint("RIGHT", -2, 0)
+    row.ttsBtn.icon = row.ttsBtn:CreateTexture(nil, "ARTWORK")
+    row.ttsBtn.icon:SetAllPoints()
+    row.ttsBtn.icon:SetAtlas("chatframe-button-icon-voicechat")
+    row.ttsBtn.icon:SetAlpha(0.5)
+    row.ttsBtn:SetScript("OnClick", function()
+        if row.playerName then
+            SpeakDispel(row.playerName)
+        end
+    end)
+    row.ttsBtn:SetScript("OnEnter", function(self)
+        self.icon:SetAlpha(1)
+    end)
+    row.ttsBtn:SetScript("OnLeave", function(self)
+        self.icon:SetAlpha(0.5)
+    end)
+    row.ttsBtn:Hide()
 
     parent.rows[index] = row
     return row
@@ -490,6 +518,8 @@ function PC:RefreshRosterList()
         row.text:SetText(name)
         row.text:SetTextColor(0.8, 0.8, 0.8)
         row.icon:Hide()
+        row.playerName = name
+        row.ttsBtn:Show()
         row:Show()
     end
 
