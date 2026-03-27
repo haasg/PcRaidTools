@@ -49,35 +49,19 @@ function PC:ResolveHealerIndex()
     end
 end
 
--- Safely compare a potentially secret value
-local function safeEquals(a, b)
-    local ok, result = pcall(function() return a == b end)
-    return ok and result
-end
-
--- Check if a unit has an aura by name, scanning both buffs and debuffs
-local function UnitHasAuraByName(unit, spellName)
-    for j = 1, 40 do
-        local auraData = C_UnitAuras.GetAuraDataByIndex(unit, j, "HARMFUL")
-        if not auraData then break end
-        if safeEquals(auraData.name, spellName) then return true end
-    end
-    for j = 1, 40 do
-        local auraData = C_UnitAuras.GetAuraDataByIndex(unit, j, "HELPFUL")
-        if not auraData then break end
-        if safeEquals(auraData.name, spellName) then return true end
+-- Check if a unit has any dispellable debuff (magic/curse/poison/disease)
+local function UnitHasDispellableDebuff(unit)
+    local ok, count, slot1 = pcall(C_UnitAuras.GetAuraSlots, unit, "HARMFUL|RAID_PLAYER_DISPELLABLE", 1)
+    if ok then
+        if type(count) == "number" and count > 0 then return true end
+        if slot1 then return true end
     end
     return false
 end
 
--- Build alphabetically sorted list of raid member names who have the aura
+-- Build alphabetically sorted list of raid member names who have a dispellable debuff
 function PC:GetAffectedPlayersSorted()
     local affected = {}
-    local spellId = self.parsedSpellId
-    if not spellId then return affected end
-
-    local spellName = C_Spell.GetSpellName(spellId)
-    if not spellName then return affected end
 
     local units = {}
     if IsInRaid() then
@@ -92,7 +76,7 @@ function PC:GetAffectedPlayersSorted()
     end
 
     for _, unit in ipairs(units) do
-        if UnitExists(unit) and UnitHasAuraByName(unit, spellName) then
+        if UnitExists(unit) and UnitHasDispellableDebuff(unit) then
             local name = UnitName(unit)
             if name then
                 affected[#affected + 1] = name
