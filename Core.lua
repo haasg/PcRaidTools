@@ -18,6 +18,17 @@ eventFrame:SetScript("OnEvent", function(self, event, loadedAddon)
 
     PC:CreateMainWindow()
     PC:HookMainWindowShow()
+
+    -- Periodically re-read note and refresh roster
+    C_Timer.NewTicker(3, function()
+        if PC:HasMRT() then
+            PC:ReadAndParseNote()
+        end
+        if PC.mainWindow and PC.mainWindow:IsShown() then
+            PC:RefreshNoteDisplay()
+        end
+    end)
+
     print("|cff00ccffPcRaidTools|r v" .. PC.VERSION .. " loaded. Type |cff00ccff/pc|r to open.")
 end)
 
