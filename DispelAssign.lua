@@ -32,6 +32,7 @@ end
 -- Called after a successful parse to resolve healer index
 function PC:ResolveHealerIndex()
     local myName = UnitName("player")
+    local oldIndex = self.myHealerIndex
     self.myHealerIndex = nil
     for i, entry in ipairs(self.parsedPlayers) do
         if entry.name:lower() == myName:lower() then
@@ -40,8 +41,8 @@ function PC:ResolveHealerIndex()
         end
     end
 
-    -- Clear any stale glow from a previous config
-    if self.currentGlowTarget then
+    -- Only clear glow if healer index actually changed (config changed)
+    if oldIndex ~= self.myHealerIndex and self.currentGlowTarget then
         self:ClearGlowByName(self.currentGlowTarget)
         self.currentGlowTarget = nil
     end
@@ -92,6 +93,10 @@ function PC:GetAffectedPlayersSorted()
     return affected
 end
 
+-- Cooldown: glow + TTS can only trigger once per 16 seconds
+local TRIGGER_COOLDOWN = 16
+local lastTriggerTime = 0
+
 -- Main evaluation - called on every aura change
 function PC:EvaluateAssignments()
     if not self.myHealerIndex then return end
@@ -111,7 +116,7 @@ function PC:EvaluateAssignments()
     -- My assignment: the player at my healer index in the sorted affected list
     local myTarget = affected[self.myHealerIndex]
 
-    -- No target for my index (more healers than debuffed, shouldn't happen at threshold but safe)
+    -- No target for my index
     if not myTarget then
         if self.currentGlowTarget then
             self:ClearGlowByName(self.currentGlowTarget)
@@ -122,6 +127,13 @@ function PC:EvaluateAssignments()
 
     -- Target changed or new target
     if myTarget ~= self.currentGlowTarget then
+        -- Check cooldown
+        local now = GetTime()
+        if now - lastTriggerTime < TRIGGER_COOLDOWN then
+            return
+        end
+        lastTriggerTime = now
+
         -- Clear old glow
         if self.currentGlowTarget then
             self:ClearGlowByName(self.currentGlowTarget)

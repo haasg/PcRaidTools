@@ -241,35 +241,8 @@ function PC:BuildNoteTab(parent)
     noteStatus:SetText("")
     self.noteStatus = noteStatus
 
-    local threshLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    threshLabel:SetPoint("TOPLEFT", 0, -28)
-    threshLabel:SetText("Threshold:")
-
-    local threshBox = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-    threshBox:SetSize(30, 18)
-    threshBox:SetPoint("LEFT", threshLabel, "RIGHT", 4, 0)
-    threshBox:SetAutoFocus(false)
-    threshBox:SetNumeric(true)
-    threshBox:SetMaxLetters(2)
-    threshBox:SetText(tostring(PC.auraThreshold))
-    threshBox:SetScript("OnEnterPressed", function(self)
-        local val = tonumber(self:GetText())
-        if val and val >= 1 then
-            PC.auraThreshold = val
-        end
-        self:ClearFocus()
-    end)
-    threshBox:SetScript("OnEditFocusLost", function(self)
-        local val = tonumber(self:GetText())
-        if val and val >= 1 then
-            PC.auraThreshold = val
-        else
-            self:SetText(tostring(PC.auraThreshold))
-        end
-    end)
-
     local dispelStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    dispelStatus:SetPoint("LEFT", threshBox, "RIGHT", 10, 0)
+    dispelStatus:SetPoint("TOPLEFT", 0, -28)
     dispelStatus:SetText("")
     self.dispelStatus = dispelStatus
 
@@ -561,9 +534,9 @@ function PC:RefreshDispelStatus()
     if not self.dispelStatus then return end
 
     if self.myHealerIndex then
-        self.dispelStatus:SetText("|cff44ff44You are healer #" .. self.myHealerIndex .. "|r - dispels active")
+        self.dispelStatus:SetText("|cff44ff44Healer #" .. self.myHealerIndex .. "|r | Threshold: " .. self.auraThreshold)
     elseif self.parsedSpellId and #self.parsedPlayers > 0 then
-        self.dispelStatus:SetText("|cffffaa00You are not in the healer list|r")
+        self.dispelStatus:SetText("|cffffaa00Not in healer list|r | Threshold: " .. self.auraThreshold)
     else
         self.dispelStatus:SetText("")
     end

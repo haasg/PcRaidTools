@@ -58,6 +58,18 @@ function PC:ParseNote(text)
     end
     self.parsedSpellId = spellId
 
+    -- Line 2: Threshold
+    if #lines < 2 then
+        self.parseErrors[#self.parseErrors + 1] = "Missing threshold on line 2."
+        return false
+    end
+    local threshold = tonumber(lines[2])
+    if not threshold or threshold < 1 then
+        self.parseErrors[#self.parseErrors + 1] = "Line 2 is not a valid threshold: \"" .. lines[2] .. "\""
+        return false
+    end
+    self.auraThreshold = threshold
+
     -- Find PCSTART and PCEND
     local startIdx = nil
     local endIdx = nil
