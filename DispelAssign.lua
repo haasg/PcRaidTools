@@ -6,6 +6,7 @@ local addonName, PC = ...
 
 PC.myHealerIndex = nil
 PC.currentGlowTarget = nil  -- name of player currently glowed
+PC.debugMode = false
 
 PC.auraThreshold = 6
 local dirty = false
@@ -48,17 +49,23 @@ function PC:ResolveHealerIndex()
     end
 end
 
--- Check if a unit has an aura by spell ID, scanning both buffs and debuffs
-local function UnitHasSpell(unit, spellId)
+-- Safely compare a potentially secret value
+local function safeEquals(a, b)
+    local ok, result = pcall(function() return a == b end)
+    return ok and result
+end
+
+-- Check if a unit has an aura by name, scanning both buffs and debuffs
+local function UnitHasAuraByName(unit, spellName)
     for j = 1, 40 do
         local auraData = C_UnitAuras.GetAuraDataByIndex(unit, j, "HARMFUL")
         if not auraData then break end
-        if auraData.spellId == spellId then return true end
+        if safeEquals(auraData.name, spellName) then return true end
     end
     for j = 1, 40 do
         local auraData = C_UnitAuras.GetAuraDataByIndex(unit, j, "HELPFUL")
         if not auraData then break end
-        if auraData.spellId == spellId then return true end
+        if safeEquals(auraData.name, spellName) then return true end
     end
     return false
 end
@@ -67,6 +74,10 @@ end
 function PC:GetAffectedPlayersSorted()
     local affected = {}
     local spellId = self.parsedSpellId
+    if not spellId then return affected end
+
+    local spellName = C_Spell.GetSpellName(spellId)
+    if not spellName then return affected end
 
     local units = {}
     if IsInRaid() then
@@ -81,7 +92,7 @@ function PC:GetAffectedPlayersSorted()
     end
 
     for _, unit in ipairs(units) do
-        if UnitExists(unit) and UnitHasSpell(unit, spellId) then
+        if UnitExists(unit) and UnitHasAuraByName(unit, spellName) then
             local name = UnitName(unit)
             if name then
                 affected[#affected + 1] = name
@@ -98,11 +109,22 @@ local TRIGGER_COOLDOWN = 16
 local lastTriggerTime = 0
 
 -- Main evaluation - called on every aura change
+local lastDebugTime = 0
 function PC:EvaluateAssignments()
     if not self.myHealerIndex then return end
     if not self.parsedSpellId then return end
 
     local affected = self:GetAffectedPlayersSorted()
+
+    -- Debug logging (throttled to once per 2 seconds)
+    if self.debugMode then
+        local now = GetTime()
+        if now - lastDebugTime >= 2 then
+            lastDebugTime = now
+            local names = table.concat(affected, ", ")
+            print("|cff00ccff[PC Debug]|r affected=" .. #affected .. "/" .. self.auraThreshold .. " [" .. names .. "] myIdx=" .. tostring(self.myHealerIndex) .. " glow=" .. tostring(self.currentGlowTarget))
+        end
+    end
 
     -- Below threshold: clear and bail
     if #affected < self.auraThreshold then
@@ -111,6 +133,21 @@ function PC:EvaluateAssignments()
             self.currentGlowTarget = nil
         end
         return
+    end
+
+    -- Check if current glow target still has the aura
+    if self.currentGlowTarget then
+        local stillAffected = false
+        for _, name in ipairs(affected) do
+            if name == self.currentGlowTarget then
+                stillAffected = true
+                break
+            end
+        end
+        if not stillAffected then
+            self:ClearGlowByName(self.currentGlowTarget)
+            self.currentGlowTarget = nil
+        end
     end
 
     -- My assignment: the player at my healer index in the sorted affected list
@@ -125,9 +162,8 @@ function PC:EvaluateAssignments()
         return
     end
 
-    -- Target changed or new target
+    -- Target changed or new target (cooldown only applies to new glows)
     if myTarget ~= self.currentGlowTarget then
-        -- Check cooldown
         local now = GetTime()
         if now - lastTriggerTime < TRIGGER_COOLDOWN then
             return

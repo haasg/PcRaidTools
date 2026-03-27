@@ -39,8 +39,30 @@ end)
 SLASH_PCRAIDTOOLS1 = "/pc"
 SlashCmdList["PCRAIDTOOLS"] = function(msg)
     local cmd = msg and msg:trim():lower() or ""
-    if cmd == "debug" then
+    if cmd == "debugon" then
+        PC.debugMode = true
+        print("|cff00ccff[PcRaidTools]|r Debug ON - will log every 2s")
+    elseif cmd == "debugoff" then
+        PC.debugMode = false
+        print("|cff00ccff[PcRaidTools]|r Debug OFF")
+    elseif cmd == "debug" then
         PC:DebugBlizzFrames()
+    elseif cmd == "diag" then
+        print("|cff00ccff[PcRaidTools Diag]|r")
+        print("  parsedSpellId: " .. tostring(PC.parsedSpellId))
+        print("  auraThreshold: " .. tostring(PC.auraThreshold))
+        print("  myHealerIndex: " .. tostring(PC.myHealerIndex))
+        print("  currentGlowTarget: " .. tostring(PC.currentGlowTarget))
+        print("  ttsEnabled: " .. tostring(PC.ttsEnabled))
+        print("  parsedPlayers: " .. #PC.parsedPlayers)
+        if PC.parsedSpellId and PC.myHealerIndex then
+            local affected = PC:GetAffectedPlayersSorted()
+            print("  affected count: " .. #affected)
+            for i, name in ipairs(affected) do
+                print("    " .. i .. ". " .. name)
+            end
+            print("  myTarget would be: " .. tostring(affected[PC.myHealerIndex]))
+        end
     else
         PC:ToggleMainWindow()
     end

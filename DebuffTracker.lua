@@ -23,11 +23,18 @@ local function GetGroupUnits()
     return units
 end
 
+local function safeEquals(a, b)
+    local ok, result = pcall(function() return a == b end)
+    return ok and result
+end
+
 local function UnitHasAura(unit, spellId, filter)
+    local spellName = C_Spell.GetSpellName(spellId)
+    if not spellName then return false end
     for i = 1, 40 do
         local auraData = C_UnitAuras.GetAuraDataByIndex(unit, i, filter)
         if not auraData then break end
-        if auraData.spellId == spellId then
+        if safeEquals(auraData.name, spellName) then
             return true
         end
     end
