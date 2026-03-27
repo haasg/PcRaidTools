@@ -96,16 +96,19 @@ function PC:CreateMainWindow()
     tinsert(UISpecialFrames, "PcRaidToolsMain")
 
     -- Tabs
-    CreateTab(frame, "Tracker", 1)
-    CreateTab(frame, "Note", 2)
-    CreateTab(frame, "Glow", 3)
+    CreateTab(frame, "Config", 1)
+    CreateTab(frame, "Tracker", 2)
+    CreateTab(frame, "Note", 3)
+    CreateTab(frame, "Glow", 4)
 
     -- Tab content containers
+    tabContents["Config"] = CreateTabContent(frame)
     tabContents["Tracker"] = CreateTabContent(frame)
     tabContents["Note"] = CreateTabContent(frame)
     tabContents["Glow"] = CreateTabContent(frame)
 
     -- Build each tab's content
+    self:BuildConfigTab(tabContents["Config"])
     self:BuildTrackerTab(tabContents["Tracker"])
     self:BuildNoteTab(tabContents["Note"])
     self:BuildGlowTab(tabContents["Glow"])
@@ -113,8 +116,32 @@ function PC:CreateMainWindow()
     frame:Hide()
     self.mainWindow = frame
 
-    -- Default to Tracker tab
-    self:SelectTab("Tracker")
+    -- Default to Config tab
+    self:SelectTab("Config")
+end
+
+----------------------------------------
+-- Config Tab
+----------------------------------------
+
+PC.ttsEnabled = true
+
+function PC:BuildConfigTab(parent)
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetText("Settings")
+
+    -- TTS checkbox
+    local ttsCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    ttsCheck:SetPoint("TOPLEFT", 0, -30)
+    ttsCheck:SetChecked(PC.ttsEnabled)
+    ttsCheck:SetScript("OnClick", function(self)
+        PC.ttsEnabled = self:GetChecked()
+    end)
+
+    local ttsLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    ttsLabel:SetPoint("LEFT", ttsCheck, "RIGHT", 4, 0)
+    ttsLabel:SetText("TTS announce on dispel glow")
 end
 
 ----------------------------------------

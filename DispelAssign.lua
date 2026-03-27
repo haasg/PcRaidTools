@@ -130,6 +130,11 @@ function PC:EvaluateAssignments()
         local success = self:GlowPlayer(myTarget)
         if success then
             self.currentGlowTarget = myTarget
+            -- TTS announce
+            if self.ttsEnabled and C_VoiceChat and C_VoiceChat.SpeakText then
+                local rate = C_TTSSettings and C_TTSSettings.GetSpeechRate() or 0
+                C_VoiceChat.SpeakText(0, "dispel " .. myTarget, rate, 100, true)
+            end
         else
             self.currentGlowTarget = nil
         end
