@@ -402,10 +402,10 @@ function PC:RefreshNoteDisplay()
         return
     end
 
-    -- Threshold row
+    -- Config rows
     local rowIdx = 1
     local threshRow = GetOrCreateNoteRow(parsedChild, rowIdx)
-    threshRow.text:SetText("Threshold: |cffffcc00" .. self.auraThreshold .. "|r")
+    threshRow.text:SetText("Threshold: |cffffcc00" .. self.auraThreshold .. "|r  CD: |cffffcc00" .. self.triggerCooldown .. "s|r")
     threshRow.icon:SetTexture("Interface\\RAIDFRAME\\ReadyCheck-Ready")
     threshRow.icon:Show()
     threshRow:Show()

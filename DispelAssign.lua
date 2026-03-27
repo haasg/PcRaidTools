@@ -87,8 +87,7 @@ function PC:GetAffectedPlayersSorted()
     return affected
 end
 
--- Cooldown: glow + TTS can only trigger once per 16 seconds
-local TRIGGER_COOLDOWN = 16
+PC.triggerCooldown = 16  -- default, overridden by note
 local lastTriggerTime = 0
 
 -- Main evaluation - called on every aura change
@@ -147,7 +146,7 @@ function PC:EvaluateAssignments()
     -- Target changed or new target (cooldown only applies to new glows)
     if myTarget ~= self.currentGlowTarget then
         local now = GetTime()
-        if now - lastTriggerTime < TRIGGER_COOLDOWN then
+        if now - lastTriggerTime < self.triggerCooldown then
             return
         end
         lastTriggerTime = now

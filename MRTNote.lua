@@ -56,6 +56,18 @@ function PC:ParseNote(text)
     end
     self.auraThreshold = threshold
 
+    -- Line 2: Cooldown (seconds)
+    if #lines < 2 then
+        self.parseErrors[#self.parseErrors + 1] = "Missing cooldown on line 2."
+        return false
+    end
+    local cooldown = tonumber(lines[2])
+    if not cooldown or cooldown < 0 then
+        self.parseErrors[#self.parseErrors + 1] = "Line 2 is not a valid cooldown: \"" .. lines[2] .. "\""
+        return false
+    end
+    self.triggerCooldown = cooldown
+
     -- Find PCSTART and PCEND
     local startIdx = nil
     local endIdx = nil
