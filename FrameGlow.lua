@@ -5,6 +5,9 @@ local addonName, PC = ...
 ----------------------------------------
 
 PC.activeGlows = {}  -- [playerName] = { frame, overlay }
+PC.glowColor = { r = 1, g = 0, b = 1 }
+PC.glowSize = 2
+PC.glowStyle = "thick"  -- "solid", "pulse", "thick"
 
 -- Find the unit token for a player name
 function PC:GetUnitForName(name)
@@ -113,35 +116,118 @@ function PC:DebugBlizzFrames()
     end
 end
 
--- Create or get the glow overlay on a frame
-local function GetOrCreateOverlay(frame)
+-- Create or get the glow container on a frame
+-- Parented to UIParent and anchored via SetPoint — works on secure frames in combat
+local function GetOrCreateGlow(frame)
     if frame.pcRaidToolsGlow then
         return frame.pcRaidToolsGlow
     end
 
-    local overlay = CreateFrame("Frame", nil, frame, "BackdropTemplate")
-    overlay:SetPoint("TOPLEFT", -3, 3)
-    overlay:SetPoint("BOTTOMRIGHT", 3, -3)
-    overlay:SetFrameStrata("HIGH")
-    overlay:SetBackdrop({
-        edgeFile = "Interface\\Buttons\\WHITE8x8",
-        edgeSize = 3,
-    })
-    overlay:Hide()
+    local glow = CreateFrame("Frame", nil, UIParent)
+    glow:SetPoint("TOPLEFT", frame, "TOPLEFT", 0, 0)
+    glow:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", 0, 0)
+    glow:SetFrameStrata(frame:GetFrameStrata())
+    glow:SetFrameLevel(frame:GetFrameLevel() + 15)
 
-    frame.pcRaidToolsGlow = overlay
-    return overlay
+    -- Main border layer
+    glow.border = CreateFrame("Frame", nil, glow, "BackdropTemplate")
+
+    -- Extra layers for "thick" style
+    glow.layers = {}
+    for i = 1, 3 do
+        local layer = CreateFrame("Frame", nil, glow, "BackdropTemplate")
+        layer:Hide()
+        glow.layers[i] = layer
+    end
+
+    -- Pulse animation state
+    glow.elapsed = 0
+    glow.direction = 1
+
+    glow:SetScript("OnUpdate", function(self, dt)
+        -- Hide if owner frame is gone
+        if not self.ownerFrame or not self.ownerFrame:IsVisible() then
+            self:Hide()
+            return
+        end
+        if self.style ~= "pulse" then return end
+        self.elapsed = self.elapsed + dt
+        local speed = 1.2
+        local progress = self.elapsed / speed
+        if progress >= 1 then
+            self.direction = -self.direction
+            self.elapsed = 0
+            progress = 0
+        end
+        local t = progress * progress * (3 - 2 * progress)
+        local alpha
+        if self.direction == 1 then
+            alpha = 0.4 + 0.6 * t
+        else
+            alpha = 1.0 - 0.6 * t
+        end
+        self.border:SetAlpha(alpha)
+    end)
+
+    -- Hide glow when owner frame hides
+    glow.ownerFrame = frame
+    frame:HookScript("OnHide", function()
+        if frame.pcRaidToolsGlow then
+            frame.pcRaidToolsGlow:Hide()
+        end
+    end)
+
+    glow:Hide()
+    frame.pcRaidToolsGlow = glow
+    return glow
 end
 
--- Glow a specific frame
-function PC:GlowFrame(frame, r, g, b)
+-- Apply glow settings to a glow container
+local function ApplyGlowStyle(glow, r, g, b, size, style)
+    local edgeSize = math.max(1, size)
+
+    -- Configure main border
+    glow.border:ClearAllPoints()
+    glow.border:SetPoint("TOPLEFT", glow, "TOPLEFT", -size, size)
+    glow.border:SetPoint("BOTTOMRIGHT", glow, "BOTTOMRIGHT", size, -size)
+    glow.border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = edgeSize })
+    glow.border:SetBackdropBorderColor(r, g, b, 1)
+    glow.border:SetAlpha(1)
+    glow.border:Show()
+
+    glow.style = style
+    glow.elapsed = 0
+    glow.direction = 1
+
+    -- Hide extra layers by default
+    for _, layer in ipairs(glow.layers) do
+        layer:Hide()
+    end
+
+    if style == "thick" then
+        -- Multi-layer glow: each layer expands outward with decreasing alpha
+        for i, layer in ipairs(glow.layers) do
+            local offset = size + i * 2
+            local layerAlpha = math.max(0, 1.0 - i * 0.3)
+            layer:ClearAllPoints()
+            layer:SetPoint("TOPLEFT", glow, "TOPLEFT", -offset, offset)
+            layer:SetPoint("BOTTOMRIGHT", glow, "BOTTOMRIGHT", offset, -offset)
+            layer:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = edgeSize })
+            layer:SetBackdropBorderColor(r, g, b, layerAlpha)
+            layer:Show()
+        end
+    end
+end
+
+-- Glow a specific frame using config settings
+function PC:GlowFrame(frame)
     if not frame then return end
-    r = r or 0.3
-    g = g or 1
-    b = b or 0.3
-    local overlay = GetOrCreateOverlay(frame)
-    overlay:SetBackdropBorderColor(r, g, b, 1)
-    overlay:Show()
+    local r = self.glowColor.r
+    local g = self.glowColor.g
+    local b = self.glowColor.b
+    local glow = GetOrCreateGlow(frame)
+    ApplyGlowStyle(glow, r, g, b, self.glowSize, self.glowStyle)
+    glow:Show()
 end
 
 -- Clear glow on a specific frame
@@ -153,7 +239,7 @@ function PC:ClearGlow(frame)
 end
 
 -- Glow a player by name
-function PC:GlowPlayer(name, r, g, b)
+function PC:GlowPlayer(name)
     if not name or name == "" then
         return false, "No name provided"
     end
@@ -171,7 +257,7 @@ function PC:GlowPlayer(name, r, g, b)
     -- Clear existing glow for this name if any
     self:ClearGlowByName(name)
 
-    self:GlowFrame(frame, r, g, b)
+    self:GlowFrame(frame)
     self.activeGlows[name:lower()] = { frame = frame, overlay = frame.pcRaidToolsGlow }
 
     return true, "Glowing " .. name

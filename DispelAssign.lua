@@ -90,6 +90,54 @@ end
 PC.triggerCooldown = 16  -- default, overridden by note
 local lastTriggerTime = 0
 
+-- Compute my dispel target with self-dispel priority
+function PC:ComputeMyTarget(affected)
+    if not self.myHealerIndex then return nil end
+
+    local myName = UnitName("player")
+
+    -- Build set of debuffed names
+    local debuffedSet = {}
+    for _, name in ipairs(affected) do
+        debuffedSet[name:lower()] = true
+    end
+
+    -- First pass: find healers who are debuffed (self-assign)
+    local selfAssigned = {}  -- set of healer names who self-dispel
+    for _, entry in ipairs(self.parsedPlayers) do
+        if debuffedSet[entry.name:lower()] then
+            selfAssigned[entry.name:lower()] = true
+        end
+    end
+
+    -- Am I self-assigned?
+    if selfAssigned[myName:lower()] then
+        return myName
+    end
+
+    -- Second pass: remaining debuffed (alphabetical), assigned to remaining healers (in list order)
+    local remainingDebuffed = {}
+    for _, name in ipairs(affected) do
+        if not selfAssigned[name:lower()] then
+            remainingDebuffed[#remainingDebuffed + 1] = name
+        end
+    end
+
+    -- Build remaining healer order (preserving list order, skipping self-assigned)
+    local remainingIdx = 0
+    for _, entry in ipairs(self.parsedPlayers) do
+        if not selfAssigned[entry.name:lower()] then
+            remainingIdx = remainingIdx + 1
+            if entry.name:lower() == myName:lower() then
+                -- I'm the Nth remaining healer, I get the Nth remaining debuffed player
+                return remainingDebuffed[remainingIdx]
+            end
+        end
+    end
+
+    return nil
+end
+
 -- Main evaluation - called on every aura change
 local lastDebugTime = 0
 function PC:EvaluateAssignments()
@@ -107,16 +155,7 @@ function PC:EvaluateAssignments()
         end
     end
 
-    -- Below threshold: clear and bail
-    if #affected < self.auraThreshold then
-        if self.currentGlowTarget then
-            self:ClearGlowByName(self.currentGlowTarget)
-            self.currentGlowTarget = nil
-        end
-        return
-    end
-
-    -- Check if current glow target still has the aura
+    -- If we have an active glow, only clear it when that player's debuff is gone
     if self.currentGlowTarget then
         local stillAffected = false
         for _, name in ipairs(affected) do
@@ -128,22 +167,22 @@ function PC:EvaluateAssignments()
         if not stillAffected then
             self:ClearGlowByName(self.currentGlowTarget)
             self.currentGlowTarget = nil
+        else
+            -- Target still has debuff, keep glowing, don't reassign
+            return
         end
     end
 
-    -- My assignment: the player at my healer index in the sorted affected list
-    local myTarget = affected[self.myHealerIndex]
-
-    -- No target for my index
-    if not myTarget then
-        if self.currentGlowTarget then
-            self:ClearGlowByName(self.currentGlowTarget)
-            self.currentGlowTarget = nil
-        end
+    -- No active glow — check if we should assign a new one
+    if #affected < self.auraThreshold then
         return
     end
 
-    -- Target changed or new target (cooldown only applies to new glows)
+    -- Compute my assignment with self-dispel priority
+    local myTarget = self:ComputeMyTarget(affected)
+    if not myTarget then return end
+
+    -- New target (cooldown only applies to new glows)
     if myTarget ~= self.currentGlowTarget then
         local now = GetTime()
         if now - lastTriggerTime < self.triggerCooldown then
@@ -162,7 +201,7 @@ function PC:EvaluateAssignments()
             -- TTS announce
             if self.ttsEnabled and C_VoiceChat and C_VoiceChat.SpeakText then
                 local rate = C_TTSSettings and C_TTSSettings.GetSpeechRate() or 0
-                C_VoiceChat.SpeakText(0, "dispel " .. myTarget, rate, 100, true)
+                C_VoiceChat.SpeakText(0, myTarget, rate, 100, true)
             end
         else
             self.currentGlowTarget = nil

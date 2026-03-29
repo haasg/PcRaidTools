@@ -126,6 +126,25 @@ end
 
 PC.ttsEnabled = true
 
+local function CreateSlider(parent, label, min, max, step, initial, x, y, onChange)
+    local slider = CreateFrame("Slider", nil, parent, "OptionsSliderTemplate")
+    slider:SetPoint("TOPLEFT", x, y)
+    slider:SetSize(120, 16)
+    slider:SetMinMaxValues(min, max)
+    slider:SetValueStep(step)
+    slider:SetObeyStepOnDrag(true)
+    slider:SetValue(initial)
+    slider.Low:SetText(min)
+    slider.High:SetText(max)
+    slider.Text:SetText(label .. ": " .. initial)
+    slider:SetScript("OnValueChanged", function(self, value)
+        value = math.floor(value / step + 0.5) * step
+        self.Text:SetText(label .. ": " .. string.format("%.2f", value))
+        onChange(value)
+    end)
+    return slider
+end
+
 function PC:BuildConfigTab(parent)
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 0, 0)
@@ -133,7 +152,7 @@ function PC:BuildConfigTab(parent)
 
     -- TTS checkbox
     local ttsCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    ttsCheck:SetPoint("TOPLEFT", 0, -30)
+    ttsCheck:SetPoint("TOPLEFT", 0, -24)
     ttsCheck:SetChecked(PC.ttsEnabled)
     ttsCheck:SetScript("OnClick", function(self)
         PC.ttsEnabled = self:GetChecked()
@@ -142,6 +161,91 @@ function PC:BuildConfigTab(parent)
     local ttsLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     ttsLabel:SetPoint("LEFT", ttsCheck, "RIGHT", 4, 0)
     ttsLabel:SetText("TTS announce on dispel glow")
+
+    -- Glow Style
+    local styleLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    styleLabel:SetPoint("TOPLEFT", 0, -58)
+    styleLabel:SetText("Glow Style:")
+
+    local styles = { "solid", "pulse", "thick" }
+    local styleButtons = {}
+    for i, style in ipairs(styles) do
+        local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        btn:SetSize(70, 20)
+        btn:SetPoint("TOPLEFT", (i - 1) * 74, -74)
+        btn:SetText(style:sub(1,1):upper() .. style:sub(2))
+        btn:SetScript("OnClick", function()
+            PC.glowStyle = style
+            for _, b in ipairs(styleButtons) do
+                b:SetAlpha(0.5)
+            end
+            btn:SetAlpha(1)
+        end)
+        btn:SetAlpha(style == PC.glowStyle and 1 or 0.5)
+        styleButtons[i] = btn
+    end
+
+    -- Glow Size
+    CreateSlider(parent, "Size", 1, 8, 1, PC.glowSize, 0, -108, function(val)
+        PC.glowSize = val
+    end)
+
+    -- Color preview swatch
+    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    colorLabel:SetPoint("TOPLEFT", 0, -142)
+    colorLabel:SetText("Glow Color:")
+
+    local swatch = parent:CreateTexture(nil, "ARTWORK")
+    swatch:SetSize(20, 20)
+    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
+    swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
+
+    -- R slider
+    local rSlider = CreateSlider(parent, "R", 0, 1, 0.05, PC.glowColor.r, 0, -170, function(val)
+        PC.glowColor.r = val
+        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
+    end)
+
+    -- G slider
+    local gSlider = CreateSlider(parent, "G", 0, 1, 0.05, PC.glowColor.g, 0, -206, function(val)
+        PC.glowColor.g = val
+        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
+    end)
+
+    -- B slider
+    local bSlider = CreateSlider(parent, "B", 0, 1, 0.05, PC.glowColor.b, 0, -242, function(val)
+        PC.glowColor.b = val
+        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
+    end)
+
+    -- Test glow buttons
+    local testStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    testStatus:SetPoint("TOPLEFT", 0, -272)
+    testStatus:SetText("")
+
+    local testOnBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testOnBtn:SetSize(70, 22)
+    testOnBtn:SetPoint("TOPLEFT", 0, -286)
+    testOnBtn:SetText("Test On")
+    testOnBtn:SetScript("OnClick", function()
+        local myName = UnitName("player")
+        PC:ClearAllGlows()
+        local success, msg = PC:GlowPlayer(myName)
+        if success then
+            testStatus:SetText("|cff44ff44Glow ON on " .. myName .. "|r")
+        else
+            testStatus:SetText("|cffff4444" .. msg .. "|r")
+        end
+    end)
+
+    local testOffBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testOffBtn:SetSize(70, 22)
+    testOffBtn:SetPoint("LEFT", testOnBtn, "RIGHT", 6, 0)
+    testOffBtn:SetText("Test Off")
+    testOffBtn:SetScript("OnClick", function()
+        PC:ClearAllGlows()
+        testStatus:SetText("|cffaaaaaaGlow cleared|r")
+    end)
 end
 
 ----------------------------------------
@@ -309,7 +413,7 @@ local NOTE_ROW_HEIGHT = 18
 local function SpeakDispel(name)
     if C_VoiceChat and C_VoiceChat.SpeakText then
         local rate = C_TTSSettings and C_TTSSettings.GetSpeechRate() or 0
-        C_VoiceChat.SpeakText(0, "dispel " .. name, rate, 100, true)
+        C_VoiceChat.SpeakText(0, name, rate, 100, true)
     end
 end
 
