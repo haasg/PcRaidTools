@@ -22,6 +22,10 @@ local debugEntries = {}
 local debugPanels = {}
 local activeDebugPanel = nil
 
+local configEntries = {}
+local configPanels = {}
+local activeConfigPanel = nil
+
 local function CreateTab(parent, name, index)
     local tab = CreateFrame("Button", nil, parent)
     tab:SetSize(80, TAB_HEIGHT)
@@ -272,6 +276,18 @@ function PC:SelectDebugPanel(name)
     end
 end
 
+function PC:SelectConfigPanel(name)
+    for panelName, panel in pairs(configPanels) do
+        panel:Hide()
+        configEntries[panelName].bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+        configEntries[panelName].text:SetTextColor(0.6, 0.6, 0.6)
+    end
+    configPanels[name]:Show()
+    configEntries[name].bg:SetColorTexture(0.3, 0.3, 0.5, 0.9)
+    configEntries[name].text:SetTextColor(1, 1, 1)
+    activeConfigPanel = name
+end
+
 function PC:SelectTab(name)
     for tabName, content in pairs(tabContents) do
         content:Hide()
@@ -286,6 +302,10 @@ function PC:SelectTab(name)
     if name == "Raid" then
         if activeRaidPanel then
             PC:SelectRaidPanel(activeRaidPanel)
+        end
+    elseif name == "Config" then
+        if activeConfigPanel then
+            PC:SelectConfigPanel(activeConfigPanel)
         end
     elseif name == "Debug" then
         if activeDebugPanel then
@@ -333,16 +353,25 @@ function PC:CreateMainWindow()
 
     -- Tabs
     CreateTab(frame, "Raid", 1)
-    CreateTab(frame, "Debug", 2)
+    CreateTab(frame, "Config", 2)
+    CreateTab(frame, "Debug", 3)
 
     -- Tab content containers
     tabContents["Raid"] = CreateTabContent(frame)
+    tabContents["Config"] = CreateTabContent(frame)
     tabContents["Debug"] = CreateTabContent(frame)
 
     -- Build Raid tab with boss hierarchy sidebar
     CreateRaidSidebarLayout(tabContents["Raid"])
     self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
     self:BuildExplosionPanel(raidPanels["Cosmos.Explosion"])
+
+    -- Build Config tab with sidebar (Text, Bar templates)
+    CreateSidebarLayout(tabContents["Config"], { "Text", "Bar" }, configEntries, configPanels, function(name)
+        PC:SelectConfigPanel(name)
+    end)
+    self:BuildTextTemplatePanel(configPanels["Text"])
+    self:BuildBarTemplatePanel(configPanels["Bar"])
 
     -- Build Debug tab with sidebar
     CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow" }, debugEntries, debugPanels, function(name)
@@ -357,6 +386,7 @@ function PC:CreateMainWindow()
 
     -- Default selections
     self:SelectRaidPanel("Vanguard.Dispel")
+    self:SelectConfigPanel("Text")
     self:SelectDebugPanel("Tracker")
     self:SelectTab("Raid")
 end
@@ -563,18 +593,186 @@ function PC:BuildExplosionPanel(parent)
         PC:ClearBossTimers()
     end)
 
-    -- Move anchors button
-    local moveBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    moveBtn:SetSize(120, 22)
-    moveBtn:SetPoint("LEFT", clearBtn, "RIGHT", 8, 0)
-    moveBtn:SetText("Move Anchors")
-    moveBtn:SetScript("OnClick", function()
+    local status = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    status:SetPoint("TOPLEFT", 0, infoY - 38)
+    status:SetText("|cff888888Use Test to preview. Reposition in Config tab.|r")
+end
+
+----------------------------------------
+-- Timer Template Panels (Config tab)
+----------------------------------------
+
+function PC:BuildTextTemplatePanel(parent)
+    local tmpl = self:GetTimerTemplate("text")
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetText("Text Timer Template")
+
+    local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    desc:SetPoint("TOPLEFT", 0, -22)
+    desc:SetText("|cff888888Style for all text countdown displays (e.g. Bait)|r")
+
+    -- Anchor button
+    local anchorBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    anchorBtn:SetSize(130, 22)
+    anchorBtn:SetPoint("TOPLEFT", 0, -46)
+    anchorBtn:SetText("Toggle Anchors")
+    anchorBtn:SetScript("OnClick", function()
         PC:ToggleTimerAnchors()
     end)
 
-    local status = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    status:SetPoint("TOPLEFT", 0, infoY - 38)
-    status:SetText("|cff888888Use Test to preview. Move Anchors to reposition on screen.|r")
+    -- Font Size
+    CreateSlider(parent, "Font Size", 12, 48, 1, tmpl.fontSize, 0, -90, function(val)
+        PC:SaveTimerTemplateSetting("text", "fontSize", val)
+    end)
+
+    -- Font Color
+    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    colorLabel:SetPoint("TOPLEFT", 0, -130)
+    colorLabel:SetText("Font Color:")
+
+    local swatch = parent:CreateTexture(nil, "ARTWORK")
+    swatch:SetSize(20, 20)
+    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
+    swatch:SetColorTexture(tmpl.fontColor.r, tmpl.fontColor.g, tmpl.fontColor.b)
+
+    CreateSlider(parent, "R", 0, 1, 0.05, tmpl.fontColor.r, 0, -158, function(val)
+        local c = PC:GetTimerTemplate("text").fontColor
+        c.r = val
+        PC:SaveTimerTemplateSetting("text", "fontColor", c)
+        swatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    CreateSlider(parent, "G", 0, 1, 0.05, tmpl.fontColor.g, 0, -194, function(val)
+        local c = PC:GetTimerTemplate("text").fontColor
+        c.g = val
+        PC:SaveTimerTemplateSetting("text", "fontColor", c)
+        swatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    CreateSlider(parent, "B", 0, 1, 0.05, tmpl.fontColor.b, 0, -230, function(val)
+        local c = PC:GetTimerTemplate("text").fontColor
+        c.b = val
+        PC:SaveTimerTemplateSetting("text", "fontColor", c)
+        swatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    -- Test button
+    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testBtn:SetSize(80, 22)
+    testBtn:SetPoint("TOPLEFT", 0, -270)
+    testBtn:SetText("Preview")
+    testBtn:SetScript("OnClick", function()
+        PC:TestBossTimer("Cosmos.Explosion")
+    end)
+end
+
+function PC:BuildBarTemplatePanel(parent)
+    local tmpl = self:GetTimerTemplate("bar")
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetText("Bar Timer Template")
+
+    local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    desc:SetPoint("TOPLEFT", 0, -22)
+    desc:SetText("|cff888888Style for all bar timer displays (e.g. Explosion)|r")
+
+    -- Anchor button
+    local anchorBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    anchorBtn:SetSize(130, 22)
+    anchorBtn:SetPoint("TOPLEFT", 0, -46)
+    anchorBtn:SetText("Toggle Anchors")
+    anchorBtn:SetScript("OnClick", function()
+        PC:ToggleTimerAnchors()
+    end)
+
+    -- Width
+    CreateSlider(parent, "Width", 150, 400, 5, tmpl.width, 0, -90, function(val)
+        PC:SaveTimerTemplateSetting("bar", "width", val)
+    end)
+
+    -- Height
+    CreateSlider(parent, "Height", 14, 40, 1, tmpl.height, 0, -126, function(val)
+        PC:SaveTimerTemplateSetting("bar", "height", val)
+    end)
+
+    -- Font Size
+    CreateSlider(parent, "Font Size", 8, 24, 1, tmpl.fontSize, 0, -162, function(val)
+        PC:SaveTimerTemplateSetting("bar", "fontSize", val)
+    end)
+
+    -- Bar Color
+    local barColorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    barColorLabel:SetPoint("TOPLEFT", 0, -200)
+    barColorLabel:SetText("Bar Color:")
+
+    local barSwatch = parent:CreateTexture(nil, "ARTWORK")
+    barSwatch:SetSize(20, 20)
+    barSwatch:SetPoint("LEFT", barColorLabel, "RIGHT", 6, 0)
+    barSwatch:SetColorTexture(tmpl.barColor.r, tmpl.barColor.g, tmpl.barColor.b)
+
+    CreateSlider(parent, "R", 0, 1, 0.05, tmpl.barColor.r, 0, -228, function(val)
+        local c = PC:GetTimerTemplate("bar").barColor
+        c.r = val
+        PC:SaveTimerTemplateSetting("bar", "barColor", c)
+        barSwatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    CreateSlider(parent, "G", 0, 1, 0.05, tmpl.barColor.g, 0, -264, function(val)
+        local c = PC:GetTimerTemplate("bar").barColor
+        c.g = val
+        PC:SaveTimerTemplateSetting("bar", "barColor", c)
+        barSwatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    CreateSlider(parent, "B", 0, 1, 0.05, tmpl.barColor.b, 0, -300, function(val)
+        local c = PC:GetTimerTemplate("bar").barColor
+        c.b = val
+        PC:SaveTimerTemplateSetting("bar", "barColor", c)
+        barSwatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    -- Background Color
+    local bgColorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    bgColorLabel:SetPoint("TOPLEFT", 0, -340)
+    bgColorLabel:SetText("Background Color:")
+
+    local bgSwatch = parent:CreateTexture(nil, "ARTWORK")
+    bgSwatch:SetSize(20, 20)
+    bgSwatch:SetPoint("LEFT", bgColorLabel, "RIGHT", 6, 0)
+    bgSwatch:SetColorTexture(tmpl.bgColor.r, tmpl.bgColor.g, tmpl.bgColor.b)
+
+    CreateSlider(parent, "R", 0, 1, 0.05, tmpl.bgColor.r, 0, -368, function(val)
+        local c = PC:GetTimerTemplate("bar").bgColor
+        c.r = val
+        PC:SaveTimerTemplateSetting("bar", "bgColor", c)
+        bgSwatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    CreateSlider(parent, "G", 0, 1, 0.05, tmpl.bgColor.g, 0, -404, function(val)
+        local c = PC:GetTimerTemplate("bar").bgColor
+        c.g = val
+        PC:SaveTimerTemplateSetting("bar", "bgColor", c)
+        bgSwatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    CreateSlider(parent, "B", 0, 1, 0.05, tmpl.bgColor.b, 0, -440, function(val)
+        local c = PC:GetTimerTemplate("bar").bgColor
+        c.b = val
+        PC:SaveTimerTemplateSetting("bar", "bgColor", c)
+        bgSwatch:SetColorTexture(c.r, c.g, c.b)
+    end)
+
+    -- Test button
+    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testBtn:SetSize(80, 22)
+    testBtn:SetPoint("TOPLEFT", 0, -480)
+    testBtn:SetText("Preview")
+    testBtn:SetScript("OnClick", function()
+        PC:TestBossTimer("Cosmos.Explosion")
+    end)
 end
 
 ----------------------------------------

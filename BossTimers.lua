@@ -28,37 +28,98 @@ PC.bossTimerRules = {
     },
 }
 
--- Active timeline events being tracked: eventId -> {rule, startTime, timelineDuration, triggersStarted = {}}
+----------------------------------------
+-- Display Templates
+----------------------------------------
+
+local defaultTemplates = {
+    text = {
+        fontSize = 24,
+        fontColor = { r = 1, g = 0.8, b = 0 },
+        anchor = { point = "CENTER", relPoint = "CENTER", x = 0, y = 120 },
+    },
+    bar = {
+        width = 250,
+        height = 22,
+        fontSize = 11,
+        barColor = { r = 0.9, g = 0.4, b = 0.1 },
+        bgColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.8 },
+        anchor = { point = "CENTER", relPoint = "CENTER", x = 0, y = 80 },
+    },
+}
+
+local function GetTemplate(templateType)
+    local saved = PcRaidToolsDB and PcRaidToolsDB.timerTemplates and PcRaidToolsDB.timerTemplates[templateType]
+    local defaults = defaultTemplates[templateType]
+    if not saved then return defaults end
+    -- Merge saved over defaults
+    local merged = {}
+    for k, v in pairs(defaults) do
+        if type(v) == "table" then
+            merged[k] = {}
+            for k2, v2 in pairs(v) do merged[k][k2] = v2 end
+            if saved[k] then
+                for k2, v2 in pairs(saved[k]) do merged[k][k2] = v2 end
+            end
+        else
+            merged[k] = saved[k] ~= nil and saved[k] or v
+        end
+    end
+    return merged
+end
+
+function PC:GetTimerTemplate(templateType)
+    return GetTemplate(templateType)
+end
+
+function PC:SaveTimerTemplateSetting(templateType, key, value)
+    PcRaidToolsDB = PcRaidToolsDB or {}
+    PcRaidToolsDB.timerTemplates = PcRaidToolsDB.timerTemplates or {}
+    PcRaidToolsDB.timerTemplates[templateType] = PcRaidToolsDB.timerTemplates[templateType] or {}
+    PcRaidToolsDB.timerTemplates[templateType][key] = value
+    self:ApplyTemplateStyle(templateType)
+end
+
+local function SaveTemplateAnchor(templateType, point, relPoint, x, y)
+    PcRaidToolsDB = PcRaidToolsDB or {}
+    PcRaidToolsDB.timerTemplates = PcRaidToolsDB.timerTemplates or {}
+    PcRaidToolsDB.timerTemplates[templateType] = PcRaidToolsDB.timerTemplates[templateType] or {}
+    PcRaidToolsDB.timerTemplates[templateType].anchor = { point = point, relPoint = relPoint, x = x, y = y }
+end
+
+-- Active timeline events being tracked
 local activeEvents = {}
 
--- Active display timers: {trigger, startTime, duration, displayFrame}
+-- Active display timers
 local activeDisplays = {}
 
 ----------------------------------------
 -- On-Screen Display Frames
 ----------------------------------------
 
--- Text display (e.g., "Bait (5.2)")
+local textDisplay, barDisplay
+
 local function CreateTextDisplay()
+    local tmpl = GetTemplate("text")
     local frame = CreateFrame("Frame", "PcRTTextTimer", UIParent, "BackdropTemplate")
     frame:SetSize(200, 40)
-    frame:SetPoint("CENTER", 0, 120)
+    frame:SetPoint(tmpl.anchor.point, UIParent, tmpl.anchor.relPoint, tmpl.anchor.x, tmpl.anchor.y)
     frame:SetFrameStrata("HIGH")
     frame:Hide()
 
     frame.text = frame:CreateFontString(nil, "OVERLAY")
-    frame.text:SetFont("Fonts\\FRIZQT__.TTF", 24, "OUTLINE")
+    frame.text:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
     frame.text:SetPoint("CENTER")
-    frame.text:SetTextColor(1, 0.8, 0)
+    frame.text:SetTextColor(tmpl.fontColor.r, tmpl.fontColor.g, tmpl.fontColor.b)
 
     return frame
 end
 
--- Bar display (e.g., "Explosion [========  ] 12.3")
 local function CreateBarDisplay()
+    local tmpl = GetTemplate("bar")
     local frame = CreateFrame("Frame", "PcRTBarTimer", UIParent, "BackdropTemplate")
-    frame:SetSize(250, 22)
-    frame:SetPoint("CENTER", 0, 80)
+    frame:SetSize(tmpl.width, tmpl.height)
+    frame:SetPoint(tmpl.anchor.point, UIParent, tmpl.anchor.relPoint, tmpl.anchor.x, tmpl.anchor.y)
     frame:SetFrameStrata("HIGH")
     frame:SetBackdrop({
         bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
@@ -66,7 +127,7 @@ local function CreateBarDisplay()
         tile = true, tileSize = 8, edgeSize = 8,
         insets = { left = 2, right = 2, top = 2, bottom = 2 },
     })
-    frame:SetBackdropColor(0.1, 0.1, 0.1, 0.8)
+    frame:SetBackdropColor(tmpl.bgColor.r, tmpl.bgColor.g, tmpl.bgColor.b, tmpl.bgColor.a)
     frame:SetBackdropBorderColor(0.4, 0.4, 0.4, 0.8)
     frame:Hide()
 
@@ -74,7 +135,7 @@ local function CreateBarDisplay()
     frame.bar:SetPoint("TOPLEFT", 4, -4)
     frame.bar:SetPoint("BOTTOMRIGHT", -4, 4)
     frame.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    frame.bar:SetStatusBarColor(0.9, 0.4, 0.1)
+    frame.bar:SetStatusBarColor(tmpl.barColor.r, tmpl.barColor.g, tmpl.barColor.b)
     frame.bar:SetMinMaxValues(0, 1)
 
     frame.bar.bg = frame.bar:CreateTexture(nil, "BACKGROUND")
@@ -83,40 +144,29 @@ local function CreateBarDisplay()
     frame.bar.bg:SetVertexColor(0.2, 0.1, 0.05, 0.5)
 
     frame.label = frame.bar:CreateFontString(nil, "OVERLAY")
-    frame.label:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    frame.label:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
     frame.label:SetPoint("LEFT", 4, 0)
     frame.label:SetTextColor(1, 1, 1)
 
     frame.time = frame.bar:CreateFontString(nil, "OVERLAY")
-    frame.time:SetFont("Fonts\\FRIZQT__.TTF", 11, "OUTLINE")
+    frame.time:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
     frame.time:SetPoint("RIGHT", -4, 0)
     frame.time:SetTextColor(1, 1, 1)
 
     return frame
 end
 
--- Anchor frames for repositioning
-local function MakeMovable(frame, dbKey)
+local function MakeMovable(frame, templateType)
     frame:SetMovable(true)
-    frame:EnableMouse(false) -- only enable mouse when unlocked
+    frame:EnableMouse(false)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", function(self) self:StartMoving() end)
     frame:SetScript("OnDragStop", function(self)
         self:StopMovingOrSizing()
         local point, _, relPoint, x, y = self:GetPoint()
-        PcRaidToolsDB[dbKey] = { point = point, relPoint = relPoint, x = x, y = y }
+        SaveTemplateAnchor(templateType, point, relPoint, x, y)
     end)
 end
-
-local function RestorePosition(frame, dbKey)
-    local saved = PcRaidToolsDB and PcRaidToolsDB[dbKey]
-    if saved then
-        frame:ClearAllPoints()
-        frame:SetPoint(saved.point, UIParent, saved.relPoint, saved.x, saved.y)
-    end
-end
-
-local textDisplay, barDisplay
 
 function PC:InitBossTimerDisplays()
     if textDisplay then return end
@@ -124,11 +174,23 @@ function PC:InitBossTimerDisplays()
     textDisplay = CreateTextDisplay()
     barDisplay = CreateBarDisplay()
 
-    MakeMovable(textDisplay, "textTimerAnchor")
-    MakeMovable(barDisplay, "barTimerAnchor")
+    MakeMovable(textDisplay, "text")
+    MakeMovable(barDisplay, "bar")
+end
 
-    RestorePosition(textDisplay, "textTimerAnchor")
-    RestorePosition(barDisplay, "barTimerAnchor")
+function PC:ApplyTemplateStyle(templateType)
+    if templateType == "text" and textDisplay then
+        local tmpl = GetTemplate("text")
+        textDisplay.text:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
+        textDisplay.text:SetTextColor(tmpl.fontColor.r, tmpl.fontColor.g, tmpl.fontColor.b)
+    elseif templateType == "bar" and barDisplay then
+        local tmpl = GetTemplate("bar")
+        barDisplay:SetSize(tmpl.width, tmpl.height)
+        barDisplay:SetBackdropColor(tmpl.bgColor.r, tmpl.bgColor.g, tmpl.bgColor.b, tmpl.bgColor.a)
+        barDisplay.bar:SetStatusBarColor(tmpl.barColor.r, tmpl.barColor.g, tmpl.barColor.b)
+        barDisplay.label:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
+        barDisplay.time:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
+    end
 end
 
 ----------------------------------------
@@ -333,7 +395,7 @@ function PC:ToggleTimerAnchors()
     if self.timersUnlocked then
         -- Show placeholder displays for dragging
         textDisplay:EnableMouse(true)
-        textDisplay.text:SetText("Bait (5.2)")
+        textDisplay.text:SetText("Text Timer (5.2)")
         textDisplay:SetBackdrop({
             bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
             edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
@@ -345,12 +407,12 @@ function PC:ToggleTimerAnchors()
         textDisplay:Show()
 
         barDisplay:EnableMouse(true)
-        barDisplay.label:SetText("Explosion")
+        barDisplay.label:SetText("Bar Timer")
         barDisplay.time:SetText("14.0")
         barDisplay.bar:SetValue(0.7)
         barDisplay:Show()
 
-        print("|cff00ccff[PcRaidTools]|r Timer anchors UNLOCKED - drag to reposition, run again to lock")
+        print("|cff00ccff[PcRaidTools]|r Timer anchors UNLOCKED - drag to reposition")
     else
         textDisplay:EnableMouse(false)
         textDisplay:SetBackdrop(nil)
@@ -372,7 +434,6 @@ function PC:TestBossTimer(ruleKey)
     local rule = self.bossTimerRules[ruleKey]
     if not rule then return end
 
-    -- Simulate a timeline event that's about to finish
     -- Find the max startAt among triggers to set a reasonable test duration
     local maxStartAt = 0
     for _, trigger in ipairs(rule.triggers) do
@@ -381,7 +442,7 @@ function PC:TestBossTimer(ruleKey)
         end
     end
 
-    local testDuration = maxStartAt + 2 -- give 2 seconds before first trigger fires
+    local testDuration = maxStartAt + 2
     local fakeEventId = -1
 
     activeEvents[fakeEventId] = {
