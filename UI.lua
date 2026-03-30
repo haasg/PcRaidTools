@@ -473,35 +473,36 @@ local fontList = {
     { label = "Skurri",     path = "Fonts\\skurri.TTF" },
 }
 
--- Helper: creates font style cycle button
+-- Helper: creates font dropdown with preview
 local function CreateFontPicker(parent, label, initialFont, x, y, onChange)
     local fontLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     fontLabel:SetPoint("TOPLEFT", x, y)
     fontLabel:SetText(label .. ":")
 
-    local currentIdx = 1
-    for i, f in ipairs(fontList) do
-        if f.path == initialFont then currentIdx = i end
-    end
-
-    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    btn:SetSize(100, 20)
-    btn:SetPoint("LEFT", fontLabel, "RIGHT", 6, 0)
-    btn:SetText(fontList[currentIdx].label)
+    local selected = initialFont
 
     local preview = parent:CreateFontString(nil, "OVERLAY")
-    preview:SetPoint("LEFT", btn, "RIGHT", 8, 0)
-    preview:SetFont(fontList[currentIdx].path, 14, "OUTLINE")
+    preview:SetPoint("TOPLEFT", x + 200, y)
+    preview:SetFont(initialFont, 14, "OUTLINE")
     preview:SetText("AaBb123")
 
-    btn:SetScript("OnClick", function()
-        currentIdx = currentIdx % #fontList + 1
-        btn:SetText(fontList[currentIdx].label)
-        preview:SetFont(fontList[currentIdx].path, 14, "OUTLINE")
-        onChange(fontList[currentIdx].path)
+    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+    dropdown:SetPoint("LEFT", fontLabel, "RIGHT", 2, -2)
+    dropdown:SetWidth(130)
+
+    dropdown:SetupMenu(function(_, rootDescription)
+        for _, f in ipairs(fontList) do
+            rootDescription:CreateRadio(f.label, function()
+                return selected == f.path
+            end, function()
+                selected = f.path
+                preview:SetFont(f.path, 14, "OUTLINE")
+                onChange(f.path)
+            end, f.path)
+        end
     end)
 
-    return btn
+    return dropdown
 end
 
 -- Available bar textures
@@ -512,38 +513,39 @@ local barTextureList = {
     { label = "Blizzard",   path = "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar" },
 }
 
--- Helper: creates bar texture cycle button with preview
+-- Helper: creates bar texture dropdown with preview
 local function CreateTexturePicker(parent, label, initialTexture, x, y, onChange)
     local texLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     texLabel:SetPoint("TOPLEFT", x, y)
     texLabel:SetText(label .. ":")
 
-    local currentIdx = 1
-    for i, t in ipairs(barTextureList) do
-        if t.path == initialTexture then currentIdx = i end
-    end
-
-    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    btn:SetSize(100, 20)
-    btn:SetPoint("LEFT", texLabel, "RIGHT", 6, 0)
-    btn:SetText(barTextureList[currentIdx].label)
+    local selected = initialTexture
 
     local preview = CreateFrame("StatusBar", nil, parent)
     preview:SetSize(80, 14)
-    preview:SetPoint("LEFT", btn, "RIGHT", 8, 0)
-    preview:SetStatusBarTexture(barTextureList[currentIdx].path)
+    preview:SetPoint("TOPLEFT", x + 200, y - 2)
+    preview:SetStatusBarTexture(initialTexture)
     preview:SetStatusBarColor(0.9, 0.4, 0.1)
     preview:SetMinMaxValues(0, 1)
     preview:SetValue(0.7)
 
-    btn:SetScript("OnClick", function()
-        currentIdx = currentIdx % #barTextureList + 1
-        btn:SetText(barTextureList[currentIdx].label)
-        preview:SetStatusBarTexture(barTextureList[currentIdx].path)
-        onChange(barTextureList[currentIdx].path)
+    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+    dropdown:SetPoint("LEFT", texLabel, "RIGHT", 2, -2)
+    dropdown:SetWidth(130)
+
+    dropdown:SetupMenu(function(_, rootDescription)
+        for _, t in ipairs(barTextureList) do
+            rootDescription:CreateRadio(t.label, function()
+                return selected == t.path
+            end, function()
+                selected = t.path
+                preview:SetStatusBarTexture(t.path)
+                onChange(t.path)
+            end, t.path)
+        end
     end)
 
-    return btn
+    return dropdown
 end
 
 function PC:BuildDispelSettingsPanel(parent)
@@ -792,15 +794,6 @@ function PC:BuildTextTemplatePanel(parent)
     CreateColorSwatch(parent, "Font Color", tmpl.fontColor, 0, -102, function(c)
         PC:SaveTimerTemplateSetting("text", "fontColor", c)
     end)
-
-    -- Preview button
-    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, -134)
-    testBtn:SetText("Preview")
-    testBtn:SetScript("OnClick", function()
-        PC:TestBossTimer("Cosmos.Explosion")
-    end)
 end
 
 function PC:BuildBarTemplatePanel(parent)
@@ -846,20 +839,6 @@ function PC:BuildBarTemplatePanel(parent)
     -- Bar Color
     CreateColorSwatch(parent, "Bar Color", tmpl.barColor, 0, -202, function(c)
         PC:SaveTimerTemplateSetting("bar", "barColor", c)
-    end)
-
-    -- Background Color
-    CreateColorSwatch(parent, "Background", tmpl.bgColor, 0, -228, function(c)
-        PC:SaveTimerTemplateSetting("bar", "bgColor", c)
-    end)
-
-    -- Preview button
-    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, -262)
-    testBtn:SetText("Preview")
-    testBtn:SetScript("OnClick", function()
-        PC:TestBossTimer("Cosmos.Explosion")
     end)
 end
 
