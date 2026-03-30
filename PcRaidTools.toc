@@ -10,4 +10,5 @@ MRTNote.lua
 DebuffTracker.lua
 FrameGlow.lua
 DispelAssign.lua
+BossTimers.lua
 UI.lua

@@ -16,6 +16,7 @@ eventFrame:SetScript("OnEvent", function(self, event, loadedAddon)
 
     PcRaidToolsDB = PcRaidToolsDB or {}
 
+    PC:InitBossTimerDisplays()
     PC:CreateMainWindow()
     PC:HookMainWindowShow()
 
@@ -62,6 +63,8 @@ SlashCmdList["PCRAIDTOOLS"] = function(msg)
             end
             print("  myTarget would be: " .. tostring(affected[PC.myHealerIndex]))
         end
+    elseif cmd == "timers" then
+        PC:ToggleTimerAnchors()
     elseif cmd == "testcleu" then
         if PC.cleuTestFrame then
             -- Stop test

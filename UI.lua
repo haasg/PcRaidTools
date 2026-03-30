@@ -342,7 +342,7 @@ function PC:CreateMainWindow()
     -- Build Raid tab with boss hierarchy sidebar
     CreateRaidSidebarLayout(tabContents["Raid"])
     self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
-    self:BuildPlaceholderPanel(raidPanels["Cosmos.Explosion"], "Explosion")
+    self:BuildExplosionPanel(raidPanels["Cosmos.Explosion"])
 
     -- Build Debug tab with sidebar
     CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow" }, debugEntries, debugPanels, function(name)
@@ -501,6 +501,80 @@ function PC:BuildPlaceholderPanel(parent, mechName)
     local placeholder = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     placeholder:SetPoint("TOPLEFT", 0, -30)
     placeholder:SetText("|cff888888Coming soon.|r")
+end
+
+----------------------------------------
+-- Explosion Panel (Cosmos)
+----------------------------------------
+
+function PC:BuildExplosionPanel(parent)
+    local rule = self.bossTimerRules["Cosmos.Explosion"]
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetText("Void Expulsion Timers")
+
+    local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    desc:SetPoint("TOPLEFT", 0, -22)
+    desc:SetText("|cff888888Bait countdown + Explosion bar from Timeline API|r")
+
+    -- Enable checkbox
+    local enableCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    enableCheck:SetPoint("TOPLEFT", 0, -44)
+    enableCheck:SetChecked(rule.enabled)
+    enableCheck:SetScript("OnClick", function(self)
+        rule.enabled = self:GetChecked()
+    end)
+
+    local enableLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    enableLabel:SetPoint("LEFT", enableCheck, "RIGHT", 4, 0)
+    enableLabel:SetText("Enabled")
+
+    -- Trigger info display
+    local infoY = -80
+    for i, trigger in ipairs(rule.triggers) do
+        local info = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        info:SetPoint("TOPLEFT", 0, infoY)
+        if trigger.startAt > 0 then
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts at " .. trigger.startAt .. "s remaining")
+        elseif trigger.startAt < 0 then
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts " .. math.abs(trigger.startAt) .. "s after timeline ends")
+        else
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts when timeline ends")
+        end
+        infoY = infoY - 18
+    end
+
+    -- Test button
+    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testBtn:SetSize(80, 22)
+    testBtn:SetPoint("TOPLEFT", 0, infoY - 10)
+    testBtn:SetText("Test")
+    testBtn:SetScript("OnClick", function()
+        PC:TestBossTimer("Cosmos.Explosion")
+    end)
+
+    -- Clear button
+    local clearBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    clearBtn:SetSize(80, 22)
+    clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 8, 0)
+    clearBtn:SetText("Clear")
+    clearBtn:SetScript("OnClick", function()
+        PC:ClearBossTimers()
+    end)
+
+    -- Move anchors button
+    local moveBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    moveBtn:SetSize(120, 22)
+    moveBtn:SetPoint("LEFT", clearBtn, "RIGHT", 8, 0)
+    moveBtn:SetText("Move Anchors")
+    moveBtn:SetScript("OnClick", function()
+        PC:ToggleTimerAnchors()
+    end)
+
+    local status = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    status:SetPoint("TOPLEFT", 0, infoY - 38)
+    status:SetText("|cff888888Use Test to preview. Move Anchors to reposition on screen.|r")
 end
 
 ----------------------------------------
