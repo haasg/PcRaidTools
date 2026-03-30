@@ -11,6 +11,15 @@ local tabs = {}
 local tabContents = {}
 local activeTab = nil
 
+-- Sub-panel state for sidebar tabs
+local raidEntries = {}
+local raidPanels = {}
+local activeRaidPanel = nil
+
+local debugEntries = {}
+local debugPanels = {}
+local activeDebugPanel = nil
+
 local function CreateTab(parent, name, index)
     local tab = CreateFrame("Button", nil, parent)
     tab:SetSize(80, TAB_HEIGHT)
@@ -40,6 +49,90 @@ local function CreateTabContent(parent)
     return content
 end
 
+----------------------------------------
+-- Sidebar Layout Builder
+----------------------------------------
+
+local function CreateSidebarLayout(parent, entries, entryTable, panelTable, onSelect)
+    -- Left sidebar
+    local sidebar = CreateFrame("Frame", nil, parent)
+    sidebar:SetPoint("TOPLEFT", 0, 0)
+    sidebar:SetPoint("BOTTOMLEFT", 0, 0)
+    sidebar:SetWidth(120)
+
+    local sidebarBg = sidebar:CreateTexture(nil, "BACKGROUND")
+    sidebarBg:SetAllPoints()
+    sidebarBg:SetColorTexture(0.15, 0.15, 0.15, 0.5)
+
+    -- Detail area
+    local detail = CreateFrame("Frame", nil, parent)
+    detail:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 8, 0)
+    detail:SetPoint("BOTTOMRIGHT", 0, 0)
+
+    -- Create sidebar entry buttons
+    for i, name in ipairs(entries) do
+        local btn = CreateFrame("Button", nil, sidebar)
+        btn:SetSize(110, 24)
+        btn:SetPoint("TOPLEFT", 5, -((i - 1) * 28))
+
+        btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        btn.text:SetPoint("LEFT", 8, 0)
+        btn.text:SetText(name)
+
+        btn.bg = btn:CreateTexture(nil, "BACKGROUND")
+        btn.bg:SetAllPoints()
+        btn.bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+
+        btn:SetScript("OnClick", function()
+            onSelect(name)
+        end)
+
+        entryTable[name] = btn
+    end
+
+    -- Create sub-panels parented to detail area
+    for _, name in ipairs(entries) do
+        local panel = CreateFrame("Frame", nil, detail)
+        panel:SetAllPoints()
+        panel:Hide()
+        panelTable[name] = panel
+    end
+end
+
+----------------------------------------
+-- Sub-panel Selection
+----------------------------------------
+
+function PC:SelectRaidPanel(name)
+    for panelName, panel in pairs(raidPanels) do
+        panel:Hide()
+        raidEntries[panelName].bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+        raidEntries[panelName].text:SetTextColor(0.6, 0.6, 0.6)
+    end
+    raidPanels[name]:Show()
+    raidEntries[name].bg:SetColorTexture(0.3, 0.3, 0.5, 0.9)
+    raidEntries[name].text:SetTextColor(1, 1, 1)
+    activeRaidPanel = name
+end
+
+function PC:SelectDebugPanel(name)
+    for panelName, panel in pairs(debugPanels) do
+        panel:Hide()
+        debugEntries[panelName].bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+        debugEntries[panelName].text:SetTextColor(0.6, 0.6, 0.6)
+    end
+    debugPanels[name]:Show()
+    debugEntries[name].bg:SetColorTexture(0.3, 0.3, 0.5, 0.9)
+    debugEntries[name].text:SetTextColor(1, 1, 1)
+    activeDebugPanel = name
+
+    if name == "Note" then
+        PC:RefreshNoteDisplay()
+    elseif name == "Tracker" then
+        PC:ScanAuras()
+    end
+end
+
 function PC:SelectTab(name)
     for tabName, content in pairs(tabContents) do
         content:Hide()
@@ -51,10 +144,14 @@ function PC:SelectTab(name)
     tabs[name].text:SetTextColor(1, 1, 1)
     activeTab = name
 
-    if name == "Note" then
-        PC:RefreshNoteDisplay()
-    elseif name == "Tracker" then
-        PC:ScanAuras()
+    if name == "Raid" then
+        if activeRaidPanel then
+            PC:SelectRaidPanel(activeRaidPanel)
+        end
+    elseif name == "Debug" then
+        if activeDebugPanel then
+            PC:SelectDebugPanel(activeDebugPanel)
+        end
     end
 end
 
@@ -64,7 +161,7 @@ end
 
 function PC:CreateMainWindow()
     local frame = CreateFrame("Frame", "PcRaidToolsMain", UIParent, "BackdropTemplate")
-    frame:SetSize(380, 500)
+    frame:SetSize(620, 550)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("MEDIUM")
     frame:SetClampedToScreen(true)
@@ -96,32 +193,38 @@ function PC:CreateMainWindow()
     tinsert(UISpecialFrames, "PcRaidToolsMain")
 
     -- Tabs
-    CreateTab(frame, "Config", 1)
-    CreateTab(frame, "Tracker", 2)
-    CreateTab(frame, "Note", 3)
-    CreateTab(frame, "Glow", 4)
+    CreateTab(frame, "Raid", 1)
+    CreateTab(frame, "Debug", 2)
 
     -- Tab content containers
-    tabContents["Config"] = CreateTabContent(frame)
-    tabContents["Tracker"] = CreateTabContent(frame)
-    tabContents["Note"] = CreateTabContent(frame)
-    tabContents["Glow"] = CreateTabContent(frame)
+    tabContents["Raid"] = CreateTabContent(frame)
+    tabContents["Debug"] = CreateTabContent(frame)
 
-    -- Build each tab's content
-    self:BuildConfigTab(tabContents["Config"])
-    self:BuildTrackerTab(tabContents["Tracker"])
-    self:BuildNoteTab(tabContents["Note"])
-    self:BuildGlowTab(tabContents["Glow"])
+    -- Build Raid tab with sidebar
+    CreateSidebarLayout(tabContents["Raid"], { "Dispel" }, raidEntries, raidPanels, function(name)
+        PC:SelectRaidPanel(name)
+    end)
+    self:BuildDispelSettingsPanel(raidPanels["Dispel"])
+
+    -- Build Debug tab with sidebar
+    CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow" }, debugEntries, debugPanels, function(name)
+        PC:SelectDebugPanel(name)
+    end)
+    self:BuildTrackerTab(debugPanels["Tracker"])
+    self:BuildNoteTab(debugPanels["Note"])
+    self:BuildGlowTab(debugPanels["Glow"])
 
     frame:Hide()
     self.mainWindow = frame
 
-    -- Default to Config tab
-    self:SelectTab("Config")
+    -- Default selections
+    self:SelectRaidPanel("Dispel")
+    self:SelectDebugPanel("Tracker")
+    self:SelectTab("Raid")
 end
 
 ----------------------------------------
--- Config Tab
+-- Dispel Settings Panel (formerly Config Tab)
 ----------------------------------------
 
 PC.ttsEnabled = true
@@ -145,10 +248,10 @@ local function CreateSlider(parent, label, min, max, step, initial, x, y, onChan
     return slider
 end
 
-function PC:BuildConfigTab(parent)
+function PC:BuildDispelSettingsPanel(parent)
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 0, 0)
-    header:SetText("Settings")
+    header:SetText("Dispel Settings")
 
     -- TTS checkbox
     local ttsCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
@@ -249,7 +352,7 @@ function PC:BuildConfigTab(parent)
 end
 
 ----------------------------------------
--- Tracker Tab
+-- Tracker Panel
 ----------------------------------------
 
 function PC:BuildTrackerTab(parent)
@@ -320,14 +423,14 @@ function PC:BuildTrackerTab(parent)
     scrollFrame:SetPoint("BOTTOMRIGHT", -18, 0)
 
     local scrollChild = CreateFrame("Frame")
-    scrollChild:SetSize(280, 1)
+    scrollChild:SetSize(440, 1)
     scrollFrame:SetScrollChild(scrollChild)
 
     self.scrollChild = scrollChild
 end
 
 ----------------------------------------
--- Note Tab
+-- Note Panel
 ----------------------------------------
 
 function PC:BuildNoteTab(parent)
@@ -357,16 +460,16 @@ function PC:BuildNoteTab(parent)
 
     local parsedScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
     parsedScroll:SetPoint("TOPLEFT", 0, -60)
-    parsedScroll:SetSize(150, 185)
+    parsedScroll:SetSize(200, 185)
 
     local parsedChild = CreateFrame("Frame")
-    parsedChild:SetSize(135, 1)
+    parsedChild:SetSize(185, 1)
     parsedScroll:SetScrollChild(parsedChild)
     self.parsedChild = parsedChild
 
     -- Right column: Raid roster
     local rosterHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    rosterHeader:SetPoint("TOPLEFT", 165, -44)
+    rosterHeader:SetPoint("TOPLEFT", 220, -44)
     rosterHeader:SetText("Raid Roster:")
 
     self.rosterCountText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -374,11 +477,11 @@ function PC:BuildNoteTab(parent)
     self.rosterCountText:SetText("")
 
     local rosterScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    rosterScroll:SetPoint("TOPLEFT", 165, -60)
-    rosterScroll:SetSize(150, 185)
+    rosterScroll:SetPoint("TOPLEFT", 220, -60)
+    rosterScroll:SetSize(200, 185)
 
     local rosterChild = CreateFrame("Frame")
-    rosterChild:SetSize(135, 1)
+    rosterChild:SetSize(185, 1)
     rosterScroll:SetScrollChild(rosterChild)
     self.rosterChild = rosterChild
 
@@ -395,7 +498,7 @@ function PC:BuildNoteTab(parent)
     editBox:SetMultiLine(true)
     editBox:SetAutoFocus(false)
     editBox:SetFontObject(GameFontHighlightSmall)
-    editBox:SetWidth(280)
+    editBox:SetWidth(440)
     editBox:SetText("")
     editBox:EnableMouse(true)
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -423,7 +526,7 @@ local function GetOrCreateNoteRow(parent, index)
         return parent.rows[index]
     end
 
-    local parentWidth = parent:GetWidth() or 135
+    local parentWidth = parent:GetWidth() or 185
     local row = CreateFrame("Frame", nil, parent)
     row:SetSize(parentWidth, NOTE_ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -((index - 1) * NOTE_ROW_HEIGHT))
@@ -640,7 +743,7 @@ function PC:RefreshDispelStatus()
 end
 
 ----------------------------------------
--- Glow Tab
+-- Glow Panel
 ----------------------------------------
 
 function PC:BuildGlowTab(parent)
@@ -720,13 +823,13 @@ local function GetOrCreateRow(parent, index)
     parent.rows = parent.rows or {}
 
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(280, ROW_HEIGHT)
+    row:SetSize(440, ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -((index - 1) * ROW_HEIGHT))
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.name:SetPoint("LEFT", 4, 0)
     row.name:SetJustifyH("LEFT")
-    row.name:SetWidth(220)
+    row.name:SetWidth(380)
 
     row.indicator = row:CreateTexture(nil, "OVERLAY")
     row.indicator:SetSize(12, 12)
@@ -804,10 +907,12 @@ end
 -- Refresh the display whenever the window is shown
 function PC:HookMainWindowShow()
     self.mainWindow:HookScript("OnShow", function()
-        if activeTab == "Tracker" then
-            PC:ScanAuras()
-        elseif activeTab == "Note" then
-            PC:RefreshNoteDisplay()
+        if activeTab == "Debug" then
+            if activeDebugPanel == "Tracker" then
+                PC:ScanAuras()
+            elseif activeDebugPanel == "Note" then
+                PC:RefreshNoteDisplay()
+            end
         end
     end)
 end
