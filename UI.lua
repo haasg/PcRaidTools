@@ -324,7 +324,7 @@ function PC:CreateMainWindow()
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", 0, -10)
-    title:SetText("|cff00ccffPcRaidTools|r")
+    title:SetText("|cff00ccffPcRaidTools|r - v" .. PC.VERSION)
 
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
