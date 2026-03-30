@@ -549,33 +549,37 @@ local function CreateTexturePicker(parent, label, initialTexture, x, y, onChange
 end
 
 function PC:BuildDispelSettingsPanel(parent)
+    local y = 0
+
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetPoint("TOPLEFT", 0, y)
     header:SetText("Dispel Settings")
+    y = y - 28
 
     -- TTS checkbox
     local ttsCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    ttsCheck:SetPoint("TOPLEFT", 0, -24)
+    ttsCheck:SetPoint("TOPLEFT", 0, y)
     ttsCheck:SetChecked(PC.ttsEnabled)
     ttsCheck:SetScript("OnClick", function(self)
         PC.ttsEnabled = self:GetChecked()
     end)
-
     local ttsLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     ttsLabel:SetPoint("LEFT", ttsCheck, "RIGHT", 4, 0)
     ttsLabel:SetText("TTS announce on dispel glow")
+    y = y - 30
 
     -- Glow Style
     local styleLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    styleLabel:SetPoint("TOPLEFT", 0, -58)
+    styleLabel:SetPoint("TOPLEFT", 0, y)
     styleLabel:SetText("Glow Style:")
+    y = y - 18
 
     local styles = { "solid", "pulse", "thick" }
     local styleButtons = {}
     for i, style in ipairs(styles) do
         local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
         btn:SetSize(70, 20)
-        btn:SetPoint("TOPLEFT", (i - 1) * 74, -74)
+        btn:SetPoint("TOPLEFT", (i - 1) * 74, y)
         btn:SetText(style:sub(1,1):upper() .. style:sub(2))
         btn:SetScript("OnClick", function()
             PC.glowStyle = style
@@ -587,25 +591,29 @@ function PC:BuildDispelSettingsPanel(parent)
         btn:SetAlpha(style == PC.glowStyle and 1 or 0.5)
         styleButtons[i] = btn
     end
+    y = y - 28
 
     -- Glow Size
-    CreateSlider(parent, "Size", 1, 8, 1, PC.glowSize, 0, -108, function(val)
+    CreateSlider(parent, "Size", 1, 8, 1, PC.glowSize, 0, y, function(val)
         PC.glowSize = val
     end)
+    y = y - 38
 
     -- Glow Color
-    CreateColorSwatch(parent, "Glow Color", PC.glowColor, 0, -142, function(c)
+    CreateColorSwatch(parent, "Glow Color", PC.glowColor, 0, y, function(c)
         PC.glowColor = c
     end)
+    y = y - 32
 
     -- Test glow buttons
     local testStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    testStatus:SetPoint("TOPLEFT", 0, -172)
+    testStatus:SetPoint("TOPLEFT", 0, y)
     testStatus:SetText("")
+    y = y - 16
 
     local testOnBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     testOnBtn:SetSize(70, 22)
-    testOnBtn:SetPoint("TOPLEFT", 0, -190)
+    testOnBtn:SetPoint("TOPLEFT", 0, y)
     testOnBtn:SetText("Test On")
     testOnBtn:SetScript("OnClick", function()
         local myName = UnitName("player")
@@ -647,92 +655,36 @@ end
 ----------------------------------------
 
 function PC:BuildExplosionPanel(parent)
-    local rule = self.bossTimerRules["Cosmos.Explosion"]
-
-    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", 0, 0)
-    header:SetText("Void Expulsion Timers")
-
-    local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    desc:SetPoint("TOPLEFT", 0, -22)
-    desc:SetText("|cff888888Bait countdown + Explosion bar from Timeline API|r")
-
-    -- Enable checkbox
-    local enableCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    enableCheck:SetPoint("TOPLEFT", 0, -44)
-    enableCheck:SetChecked(rule.enabled)
-    enableCheck:SetScript("OnClick", function(self)
-        rule.enabled = self:GetChecked()
-    end)
-
-    local enableLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    enableLabel:SetPoint("LEFT", enableCheck, "RIGHT", 4, 0)
-    enableLabel:SetText("Enabled")
-
-    -- Trigger info display
-    local infoY = -80
-    for i, trigger in ipairs(rule.triggers) do
-        local info = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        info:SetPoint("TOPLEFT", 0, infoY)
-        if trigger.startAt > 0 then
-            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts at " .. trigger.startAt .. "s remaining")
-        elseif trigger.startAt < 0 then
-            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts " .. math.abs(trigger.startAt) .. "s after timeline ends")
-        else
-            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts when timeline ends")
-        end
-        infoY = infoY - 18
-    end
-
-    -- Test button
-    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, infoY - 10)
-    testBtn:SetText("Test")
-    testBtn:SetScript("OnClick", function()
-        PC:TestBossTimer("Cosmos.Explosion")
-    end)
-
-    -- Clear button
-    local clearBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    clearBtn:SetSize(80, 22)
-    clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 8, 0)
-    clearBtn:SetText("Clear")
-    clearBtn:SetScript("OnClick", function()
-        PC:ClearBossTimers()
-    end)
-
-    local status = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    status:SetPoint("TOPLEFT", 0, infoY - 38)
-    status:SetText("|cff888888Use Test to preview. Reposition in Config tab.|r")
+    self:BuildMechanicPanel(parent, "Cosmos.Explosion", "Void Expulsion Timers")
 end
 
 -- Generic mechanic panel (enable/disable + trigger info + test)
 function PC:BuildMechanicPanel(parent, ruleKey, title)
     local rule = self.bossTimerRules[ruleKey]
     if not rule then return end
+    local y = 0
 
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetPoint("TOPLEFT", 0, y)
     header:SetText(title)
+    y = y - 28
 
     -- Enable checkbox
     local enableCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    enableCheck:SetPoint("TOPLEFT", 0, -24)
+    enableCheck:SetPoint("TOPLEFT", 0, y)
     enableCheck:SetChecked(rule.enabled)
     enableCheck:SetScript("OnClick", function(self)
         rule.enabled = self:GetChecked()
     end)
-
     local enableLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     enableLabel:SetPoint("LEFT", enableCheck, "RIGHT", 4, 0)
     enableLabel:SetText("Enabled")
+    y = y - 30
 
     -- Trigger info
-    local infoY = -58
     for _, trigger in ipairs(rule.triggers) do
         local info = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        info:SetPoint("TOPLEFT", 0, infoY)
+        info:SetPoint("TOPLEFT", 0, y)
         if trigger.startAt > 0 then
             info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts at " .. trigger.startAt .. "s remaining")
         elseif trigger.startAt < 0 then
@@ -740,13 +692,14 @@ function PC:BuildMechanicPanel(parent, ruleKey, title)
         else
             info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts when timeline ends")
         end
-        infoY = infoY - 18
+        y = y - 20
     end
+    y = y - 8
 
     -- Test / Clear
     local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, infoY - 10)
+    testBtn:SetPoint("TOPLEFT", 0, y)
     testBtn:SetText("Test")
     testBtn:SetScript("OnClick", function()
         PC:TestBossTimer(ruleKey)
@@ -767,9 +720,10 @@ end
 
 function PC:BuildTextTemplatePanel(parent)
     local tmpl = self:GetTimerTemplate("text")
+    local y = 0
 
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetPoint("TOPLEFT", 0, y)
     header:SetText("Text Timer")
 
     local anchorBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
@@ -779,28 +733,32 @@ function PC:BuildTextTemplatePanel(parent)
     anchorBtn:SetScript("OnClick", function()
         PC:ToggleTimerAnchors()
     end)
+    y = y - 32
 
-    -- Font Style
-    CreateFontPicker(parent, "Font", tmpl.font or "Fonts\\FRIZQT__.TTF", 0, -34, function(path)
+    -- Font
+    CreateFontPicker(parent, "Font", tmpl.font or "Fonts\\FRIZQT__.TTF", 0, y, function(path)
         PC:SaveTimerTemplateSetting("text", "font", path)
     end)
+    y = y - 34
 
     -- Font Size
-    CreateSlider(parent, "Font Size", 12, 48, 1, tmpl.fontSize, 0, -60, function(val)
+    CreateSlider(parent, "Font Size", 12, 48, 1, tmpl.fontSize, 0, y, function(val)
         PC:SaveTimerTemplateSetting("text", "fontSize", val)
     end)
+    y = y - 40
 
     -- Font Color
-    CreateColorSwatch(parent, "Font Color", tmpl.fontColor, 0, -102, function(c)
+    CreateColorSwatch(parent, "Font Color", tmpl.fontColor, 0, y, function(c)
         PC:SaveTimerTemplateSetting("text", "fontColor", c)
     end)
 end
 
 function PC:BuildBarTemplatePanel(parent)
     local tmpl = self:GetTimerTemplate("bar")
+    local y = 0
 
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetPoint("TOPLEFT", 0, y)
     header:SetText("Bar Timer")
 
     local anchorBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
@@ -810,34 +768,40 @@ function PC:BuildBarTemplatePanel(parent)
     anchorBtn:SetScript("OnClick", function()
         PC:ToggleTimerAnchors()
     end)
+    y = y - 32
 
     -- Width
-    CreateSlider(parent, "Width", 150, 400, 5, tmpl.width, 0, -34, function(val)
+    CreateSlider(parent, "Width", 150, 400, 5, tmpl.width, 0, y, function(val)
         PC:SaveTimerTemplateSetting("bar", "width", val)
     end)
+    y = y - 40
 
     -- Height
-    CreateSlider(parent, "Height", 14, 40, 1, tmpl.height, 0, -70, function(val)
+    CreateSlider(parent, "Height", 14, 40, 1, tmpl.height, 0, y, function(val)
         PC:SaveTimerTemplateSetting("bar", "height", val)
     end)
+    y = y - 40
 
-    -- Bar Texture
-    CreateTexturePicker(parent, "Texture", tmpl.barTexture or "Interface\\TargetingFrame\\UI-StatusBar", 0, -108, function(path)
+    -- Texture
+    CreateTexturePicker(parent, "Texture", tmpl.barTexture or "Interface\\TargetingFrame\\UI-StatusBar", 0, y, function(path)
         PC:SaveTimerTemplateSetting("bar", "barTexture", path)
     end)
+    y = y - 34
 
-    -- Font Style
-    CreateFontPicker(parent, "Font", tmpl.font or "Fonts\\FRIZQT__.TTF", 0, -134, function(path)
+    -- Font
+    CreateFontPicker(parent, "Font", tmpl.font or "Fonts\\FRIZQT__.TTF", 0, y, function(path)
         PC:SaveTimerTemplateSetting("bar", "font", path)
     end)
+    y = y - 34
 
     -- Font Size
-    CreateSlider(parent, "Font Size", 8, 24, 1, tmpl.fontSize, 0, -160, function(val)
+    CreateSlider(parent, "Font Size", 8, 24, 1, tmpl.fontSize, 0, y, function(val)
         PC:SaveTimerTemplateSetting("bar", "fontSize", val)
     end)
+    y = y - 40
 
     -- Bar Color
-    CreateColorSwatch(parent, "Bar Color", tmpl.barColor, 0, -202, function(c)
+    CreateColorSwatch(parent, "Bar Color", tmpl.barColor, 0, y, function(c)
         PC:SaveTimerTemplateSetting("bar", "barColor", c)
     end)
 end
