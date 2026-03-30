@@ -1,0 +1,38 @@
+name: Package and Release
+
+on:
+  push:
+    branches:
+      - release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from TOC
+        id: version
+        run: |
+          VERSION=$(grep -oP '## Version: \K.*' PcRaidTools.toc | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Package addon
+        run: |
+          mkdir -p PcRaidTools
+          cp *.lua PcRaidTools/
+          cp *.toc PcRaidTools/
+          zip -r PcRaidTools-${{ steps.version.outputs.version }}.zip PcRaidTools/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: PcRaidTools ${{ steps.version.outputs.tag }}
+          files: PcRaidTools-${{ steps.version.outputs.version }}.zip
+          generate_release_notes: true
