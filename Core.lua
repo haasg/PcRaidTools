@@ -62,6 +62,53 @@ SlashCmdList["PCRAIDTOOLS"] = function(msg)
             end
             print("  myTarget would be: " .. tostring(affected[PC.myHealerIndex]))
         end
+    elseif cmd == "testcleu" then
+        if PC.cleuTestFrame then
+            -- Stop test
+            PC.cleuTestFrame:UnregisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+            PC.cleuTestFrame = nil
+            if PC.cleuHeartbeat then
+                PC.cleuHeartbeat:Cancel()
+                PC.cleuHeartbeat = nil
+            end
+            print("|cff00ccff[PcRaidTools]|r CLEU test OFF")
+        else
+            -- Start test
+            local totalEvents = 0
+            local auraEvents = 0
+            local lastTotal = 0
+            local lastAura = 0
+
+            PC.cleuTestFrame = CreateFrame("Frame")
+            PC.cleuTestFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
+            PC.cleuTestFrame:SetScript("OnEvent", function()
+                totalEvents = totalEvents + 1
+                local _, subevent, _, _, _, _, _, _, destName, _, _, spellId, spellName, _, auraType = CombatLogGetCurrentEventInfo()
+                if subevent == "SPELL_AURA_APPLIED" or subevent == "SPELL_AURA_REMOVED" then
+                    auraEvents = auraEvents + 1
+                    local idSecret = issecretvalue and issecretvalue(spellId) and "SECRET" or "clean"
+                    local nameSecret = issecretvalue and issecretvalue(spellName) and "SECRET" or "clean"
+                    local destSecret = issecretvalue and issecretvalue(destName) and "SECRET" or "clean"
+                    local typeSecret = issecretvalue and issecretvalue(auraType) and "SECRET" or "clean"
+                    print("|cff00ccff[CLEU]|r " .. subevent .. " dest=" .. tostring(destName) .. "(" .. destSecret .. ") id=" .. tostring(spellId) .. "(" .. idSecret .. ") name=" .. tostring(spellName) .. "(" .. nameSecret .. ") type=" .. tostring(auraType) .. "(" .. typeSecret .. ")")
+                end
+            end)
+
+            -- Heartbeat: print every 5 seconds
+            PC.cleuHeartbeat = C_Timer.NewTicker(5, function()
+                local deltaTotal = totalEvents - lastTotal
+                local deltaAura = auraEvents - lastAura
+                lastTotal = totalEvents
+                lastAura = auraEvents
+                if deltaTotal == 0 then
+                    print("|cffff4444[CLEU HEARTBEAT]|r SILENT - 0 events in last 5s (total: " .. totalEvents .. ")")
+                else
+                    print("|cff44ff44[CLEU HEARTBEAT]|r " .. deltaTotal .. " events (" .. deltaAura .. " aura) in last 5s | total: " .. totalEvents .. " (" .. auraEvents .. " aura)")
+                end
+            end)
+
+            print("|cff00ccff[PcRaidTools]|r CLEU test ON - heartbeat every 5s, aura events printed live")
+        end
     else
         PC:ToggleMainWindow()
     end
