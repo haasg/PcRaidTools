@@ -119,6 +119,7 @@ local raidBossData = {
         label = "Cosmos",
         mechanics = {
             { key = "Explosion", label = "Explosion" },
+            { key = "Immune", label = "Immune" },
         },
     },
 }
@@ -365,6 +366,7 @@ function PC:CreateMainWindow()
     CreateRaidSidebarLayout(tabContents["Raid"])
     self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
     self:BuildExplosionPanel(raidPanels["Cosmos.Explosion"])
+    self:BuildMechanicPanel(raidPanels["Cosmos.Immune"], "Cosmos.Immune", "Immune Timer")
 
     -- Build Config tab with sidebar (Text, Bar templates)
     CreateSidebarLayout(tabContents["Config"], { "Text", "Bar" }, configEntries, configPanels, function(name)
@@ -416,6 +418,134 @@ local function CreateSlider(parent, label, min, max, step, initial, x, y, onChan
     return slider
 end
 
+-- Helper: creates a clickable color swatch that opens WoW's color picker
+local function CreateColorSwatch(parent, label, initialColor, x, y, onChange)
+    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    colorLabel:SetPoint("TOPLEFT", x, y)
+    colorLabel:SetText(label .. ":")
+
+    local swatch = CreateFrame("Button", nil, parent)
+    swatch:SetSize(22, 22)
+    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
+
+    swatch.tex = swatch:CreateTexture(nil, "ARTWORK")
+    swatch.tex:SetAllPoints()
+    swatch.tex:SetColorTexture(initialColor.r, initialColor.g, initialColor.b)
+
+    swatch.border = swatch:CreateTexture(nil, "OVERLAY")
+    swatch.border:SetPoint("TOPLEFT", -1, 1)
+    swatch.border:SetPoint("BOTTOMRIGHT", 1, -1)
+    swatch.border:SetColorTexture(0.5, 0.5, 0.5, 1)
+    swatch.tex:SetDrawLayer("OVERLAY", 1)
+
+    swatch:SetScript("OnClick", function()
+        local prev = { r = initialColor.r, g = initialColor.g, b = initialColor.b }
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = initialColor.r,
+            g = initialColor.g,
+            b = initialColor.b,
+            swatchFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                initialColor.r = r
+                initialColor.g = g
+                initialColor.b = b
+                swatch.tex:SetColorTexture(r, g, b)
+                onChange(initialColor)
+            end,
+            cancelFunc = function()
+                initialColor.r = prev.r
+                initialColor.g = prev.g
+                initialColor.b = prev.b
+                swatch.tex:SetColorTexture(prev.r, prev.g, prev.b)
+                onChange(initialColor)
+            end,
+        })
+    end)
+
+    return swatch
+end
+
+-- Available fonts
+local fontList = {
+    { label = "Default",    path = "Fonts\\FRIZQT__.TTF" },
+    { label = "Morpheus",   path = "Fonts\\MORPHEUS.TTF" },
+    { label = "Arial",      path = "Fonts\\ARIALN.TTF" },
+    { label = "Skurri",     path = "Fonts\\skurri.TTF" },
+}
+
+-- Helper: creates font style cycle button
+local function CreateFontPicker(parent, label, initialFont, x, y, onChange)
+    local fontLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    fontLabel:SetPoint("TOPLEFT", x, y)
+    fontLabel:SetText(label .. ":")
+
+    local currentIdx = 1
+    for i, f in ipairs(fontList) do
+        if f.path == initialFont then currentIdx = i end
+    end
+
+    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    btn:SetSize(100, 20)
+    btn:SetPoint("LEFT", fontLabel, "RIGHT", 6, 0)
+    btn:SetText(fontList[currentIdx].label)
+
+    local preview = parent:CreateFontString(nil, "OVERLAY")
+    preview:SetPoint("LEFT", btn, "RIGHT", 8, 0)
+    preview:SetFont(fontList[currentIdx].path, 14, "OUTLINE")
+    preview:SetText("AaBb123")
+
+    btn:SetScript("OnClick", function()
+        currentIdx = currentIdx % #fontList + 1
+        btn:SetText(fontList[currentIdx].label)
+        preview:SetFont(fontList[currentIdx].path, 14, "OUTLINE")
+        onChange(fontList[currentIdx].path)
+    end)
+
+    return btn
+end
+
+-- Available bar textures
+local barTextureList = {
+    { label = "Default",    path = "Interface\\TargetingFrame\\UI-StatusBar" },
+    { label = "Smooth",     path = "Interface\\RaidFrame\\Raid-Bar-Hp-Fill" },
+    { label = "Flat",       path = "Interface\\Buttons\\WHITE8X8" },
+    { label = "Blizzard",   path = "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar" },
+}
+
+-- Helper: creates bar texture cycle button with preview
+local function CreateTexturePicker(parent, label, initialTexture, x, y, onChange)
+    local texLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    texLabel:SetPoint("TOPLEFT", x, y)
+    texLabel:SetText(label .. ":")
+
+    local currentIdx = 1
+    for i, t in ipairs(barTextureList) do
+        if t.path == initialTexture then currentIdx = i end
+    end
+
+    local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    btn:SetSize(100, 20)
+    btn:SetPoint("LEFT", texLabel, "RIGHT", 6, 0)
+    btn:SetText(barTextureList[currentIdx].label)
+
+    local preview = CreateFrame("StatusBar", nil, parent)
+    preview:SetSize(80, 14)
+    preview:SetPoint("LEFT", btn, "RIGHT", 8, 0)
+    preview:SetStatusBarTexture(barTextureList[currentIdx].path)
+    preview:SetStatusBarColor(0.9, 0.4, 0.1)
+    preview:SetMinMaxValues(0, 1)
+    preview:SetValue(0.7)
+
+    btn:SetScript("OnClick", function()
+        currentIdx = currentIdx % #barTextureList + 1
+        btn:SetText(barTextureList[currentIdx].label)
+        preview:SetStatusBarTexture(barTextureList[currentIdx].path)
+        onChange(barTextureList[currentIdx].path)
+    end)
+
+    return btn
+end
+
 function PC:BuildDispelSettingsPanel(parent)
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 0, 0)
@@ -461,42 +591,19 @@ function PC:BuildDispelSettingsPanel(parent)
         PC.glowSize = val
     end)
 
-    -- Color preview swatch
-    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    colorLabel:SetPoint("TOPLEFT", 0, -142)
-    colorLabel:SetText("Glow Color:")
-
-    local swatch = parent:CreateTexture(nil, "ARTWORK")
-    swatch:SetSize(20, 20)
-    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
-    swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
-
-    -- R slider
-    local rSlider = CreateSlider(parent, "R", 0, 1, 0.05, PC.glowColor.r, 0, -170, function(val)
-        PC.glowColor.r = val
-        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
-    end)
-
-    -- G slider
-    local gSlider = CreateSlider(parent, "G", 0, 1, 0.05, PC.glowColor.g, 0, -206, function(val)
-        PC.glowColor.g = val
-        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
-    end)
-
-    -- B slider
-    local bSlider = CreateSlider(parent, "B", 0, 1, 0.05, PC.glowColor.b, 0, -242, function(val)
-        PC.glowColor.b = val
-        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
+    -- Glow Color
+    CreateColorSwatch(parent, "Glow Color", PC.glowColor, 0, -142, function(c)
+        PC.glowColor = c
     end)
 
     -- Test glow buttons
     local testStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    testStatus:SetPoint("TOPLEFT", 0, -272)
+    testStatus:SetPoint("TOPLEFT", 0, -172)
     testStatus:SetText("")
 
     local testOnBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     testOnBtn:SetSize(70, 22)
-    testOnBtn:SetPoint("TOPLEFT", 0, -286)
+    testOnBtn:SetPoint("TOPLEFT", 0, -190)
     testOnBtn:SetText("Test On")
     testOnBtn:SetScript("OnClick", function()
         local myName = UnitName("player")
@@ -598,56 +705,63 @@ function PC:BuildExplosionPanel(parent)
     status:SetText("|cff888888Use Test to preview. Reposition in Config tab.|r")
 end
 
+-- Generic mechanic panel (enable/disable + trigger info + test)
+function PC:BuildMechanicPanel(parent, ruleKey, title)
+    local rule = self.bossTimerRules[ruleKey]
+    if not rule then return end
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetText(title)
+
+    -- Enable checkbox
+    local enableCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    enableCheck:SetPoint("TOPLEFT", 0, -24)
+    enableCheck:SetChecked(rule.enabled)
+    enableCheck:SetScript("OnClick", function(self)
+        rule.enabled = self:GetChecked()
+    end)
+
+    local enableLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    enableLabel:SetPoint("LEFT", enableCheck, "RIGHT", 4, 0)
+    enableLabel:SetText("Enabled")
+
+    -- Trigger info
+    local infoY = -58
+    for _, trigger in ipairs(rule.triggers) do
+        local info = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        info:SetPoint("TOPLEFT", 0, infoY)
+        if trigger.startAt > 0 then
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts at " .. trigger.startAt .. "s remaining")
+        elseif trigger.startAt < 0 then
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts " .. math.abs(trigger.startAt) .. "s after timeline ends")
+        else
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts when timeline ends")
+        end
+        infoY = infoY - 18
+    end
+
+    -- Test / Clear
+    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testBtn:SetSize(80, 22)
+    testBtn:SetPoint("TOPLEFT", 0, infoY - 10)
+    testBtn:SetText("Test")
+    testBtn:SetScript("OnClick", function()
+        PC:TestBossTimer(ruleKey)
+    end)
+
+    local clearBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    clearBtn:SetSize(80, 22)
+    clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 8, 0)
+    clearBtn:SetText("Clear")
+    clearBtn:SetScript("OnClick", function()
+        PC:ClearBossTimers()
+    end)
+end
+
 ----------------------------------------
 -- Timer Template Panels (Config tab)
 ----------------------------------------
-
--- Helper: creates a clickable color swatch that opens WoW's color picker
-local function CreateColorSwatch(parent, label, initialColor, x, y, onChange)
-    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    colorLabel:SetPoint("TOPLEFT", x, y)
-    colorLabel:SetText(label .. ":")
-
-    local swatch = CreateFrame("Button", nil, parent)
-    swatch:SetSize(22, 22)
-    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
-
-    swatch.tex = swatch:CreateTexture(nil, "ARTWORK")
-    swatch.tex:SetAllPoints()
-    swatch.tex:SetColorTexture(initialColor.r, initialColor.g, initialColor.b)
-
-    swatch.border = swatch:CreateTexture(nil, "OVERLAY")
-    swatch.border:SetPoint("TOPLEFT", -1, 1)
-    swatch.border:SetPoint("BOTTOMRIGHT", 1, -1)
-    swatch.border:SetColorTexture(0.5, 0.5, 0.5, 1)
-    swatch.tex:SetDrawLayer("OVERLAY", 1)
-
-    swatch:SetScript("OnClick", function()
-        local prev = { r = initialColor.r, g = initialColor.g, b = initialColor.b }
-        ColorPickerFrame:SetupColorPickerAndShow({
-            r = initialColor.r,
-            g = initialColor.g,
-            b = initialColor.b,
-            swatchFunc = function()
-                local r, g, b = ColorPickerFrame:GetColorRGB()
-                initialColor.r = r
-                initialColor.g = g
-                initialColor.b = b
-                swatch.tex:SetColorTexture(r, g, b)
-                onChange(initialColor)
-            end,
-            cancelFunc = function()
-                initialColor.r = prev.r
-                initialColor.g = prev.g
-                initialColor.b = prev.b
-                swatch.tex:SetColorTexture(prev.r, prev.g, prev.b)
-                onChange(initialColor)
-            end,
-        })
-    end)
-
-    return swatch
-end
 
 function PC:BuildTextTemplatePanel(parent)
     local tmpl = self:GetTimerTemplate("text")
@@ -664,20 +778,25 @@ function PC:BuildTextTemplatePanel(parent)
         PC:ToggleTimerAnchors()
     end)
 
+    -- Font Style
+    CreateFontPicker(parent, "Font", tmpl.font or "Fonts\\FRIZQT__.TTF", 0, -34, function(path)
+        PC:SaveTimerTemplateSetting("text", "font", path)
+    end)
+
     -- Font Size
-    CreateSlider(parent, "Font Size", 12, 48, 1, tmpl.fontSize, 0, -40, function(val)
+    CreateSlider(parent, "Font Size", 12, 48, 1, tmpl.fontSize, 0, -60, function(val)
         PC:SaveTimerTemplateSetting("text", "fontSize", val)
     end)
 
     -- Font Color
-    CreateColorSwatch(parent, "Font Color", tmpl.fontColor, 0, -82, function(c)
+    CreateColorSwatch(parent, "Font Color", tmpl.fontColor, 0, -102, function(c)
         PC:SaveTimerTemplateSetting("text", "fontColor", c)
     end)
 
     -- Preview button
     local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, -114)
+    testBtn:SetPoint("TOPLEFT", 0, -134)
     testBtn:SetText("Preview")
     testBtn:SetScript("OnClick", function()
         PC:TestBossTimer("Cosmos.Explosion")
@@ -700,34 +819,44 @@ function PC:BuildBarTemplatePanel(parent)
     end)
 
     -- Width
-    CreateSlider(parent, "Width", 150, 400, 5, tmpl.width, 0, -40, function(val)
+    CreateSlider(parent, "Width", 150, 400, 5, tmpl.width, 0, -34, function(val)
         PC:SaveTimerTemplateSetting("bar", "width", val)
     end)
 
     -- Height
-    CreateSlider(parent, "Height", 14, 40, 1, tmpl.height, 0, -76, function(val)
+    CreateSlider(parent, "Height", 14, 40, 1, tmpl.height, 0, -70, function(val)
         PC:SaveTimerTemplateSetting("bar", "height", val)
     end)
 
+    -- Bar Texture
+    CreateTexturePicker(parent, "Texture", tmpl.barTexture or "Interface\\TargetingFrame\\UI-StatusBar", 0, -108, function(path)
+        PC:SaveTimerTemplateSetting("bar", "barTexture", path)
+    end)
+
+    -- Font Style
+    CreateFontPicker(parent, "Font", tmpl.font or "Fonts\\FRIZQT__.TTF", 0, -134, function(path)
+        PC:SaveTimerTemplateSetting("bar", "font", path)
+    end)
+
     -- Font Size
-    CreateSlider(parent, "Font Size", 8, 24, 1, tmpl.fontSize, 0, -112, function(val)
+    CreateSlider(parent, "Font Size", 8, 24, 1, tmpl.fontSize, 0, -160, function(val)
         PC:SaveTimerTemplateSetting("bar", "fontSize", val)
     end)
 
     -- Bar Color
-    CreateColorSwatch(parent, "Bar Color", tmpl.barColor, 0, -154, function(c)
+    CreateColorSwatch(parent, "Bar Color", tmpl.barColor, 0, -202, function(c)
         PC:SaveTimerTemplateSetting("bar", "barColor", c)
     end)
 
     -- Background Color
-    CreateColorSwatch(parent, "Background", tmpl.bgColor, 0, -180, function(c)
+    CreateColorSwatch(parent, "Background", tmpl.bgColor, 0, -228, function(c)
         PC:SaveTimerTemplateSetting("bar", "bgColor", c)
     end)
 
     -- Preview button
     local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, -214)
+    testBtn:SetPoint("TOPLEFT", 0, -262)
     testBtn:SetText("Preview")
     testBtn:SetScript("OnClick", function()
         PC:TestBossTimer("Cosmos.Explosion")

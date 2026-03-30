@@ -26,6 +26,18 @@ PC.bossTimerRules = {
         spellId = 1255368,
         matchDurations = {12, 60, 39, 11.5, 14, 16, 20},
     },
+    ["Cosmos.Immune"] = {
+        enabled = true,
+        triggers = {
+            {
+                type = "text",
+                label = "Immune",
+                duration = 25,
+                startAt = 25, -- starts immediately when timeline event is added
+            },
+        },
+        matchDurations = {25}, -- Stage Two transition
+    },
 }
 
 ----------------------------------------
@@ -35,6 +47,7 @@ PC.bossTimerRules = {
 local defaultTemplates = {
     text = {
         fontSize = 24,
+        font = "Fonts\\FRIZQT__.TTF",
         fontColor = { r = 1, g = 0.8, b = 0 },
         anchor = { point = "CENTER", relPoint = "CENTER", x = 0, y = 120 },
     },
@@ -42,6 +55,8 @@ local defaultTemplates = {
         width = 250,
         height = 22,
         fontSize = 11,
+        font = "Fonts\\FRIZQT__.TTF",
+        barTexture = "Interface\\TargetingFrame\\UI-StatusBar",
         barColor = { r = 0.9, g = 0.4, b = 0.1 },
         bgColor = { r = 0.1, g = 0.1, b = 0.1, a = 0.8 },
         anchor = { point = "CENTER", relPoint = "CENTER", x = 0, y = 80 },
@@ -108,7 +123,7 @@ local function CreateTextDisplay()
     frame:Hide()
 
     frame.text = frame:CreateFontString(nil, "OVERLAY")
-    frame.text:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
+    frame.text:SetFont(tmpl.font, tmpl.fontSize, "OUTLINE")
     frame.text:SetPoint("CENTER")
     frame.text:SetTextColor(tmpl.fontColor.r, tmpl.fontColor.g, tmpl.fontColor.b)
 
@@ -134,22 +149,22 @@ local function CreateBarDisplay()
     frame.bar = CreateFrame("StatusBar", nil, frame)
     frame.bar:SetPoint("TOPLEFT", 4, -4)
     frame.bar:SetPoint("BOTTOMRIGHT", -4, 4)
-    frame.bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    frame.bar:SetStatusBarTexture(tmpl.barTexture)
     frame.bar:SetStatusBarColor(tmpl.barColor.r, tmpl.barColor.g, tmpl.barColor.b)
     frame.bar:SetMinMaxValues(0, 1)
 
     frame.bar.bg = frame.bar:CreateTexture(nil, "BACKGROUND")
     frame.bar.bg:SetAllPoints()
-    frame.bar.bg:SetTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    frame.bar.bg:SetTexture(tmpl.barTexture)
     frame.bar.bg:SetVertexColor(0.2, 0.1, 0.05, 0.5)
 
     frame.label = frame.bar:CreateFontString(nil, "OVERLAY")
-    frame.label:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
+    frame.label:SetFont(tmpl.font, tmpl.fontSize, "OUTLINE")
     frame.label:SetPoint("LEFT", 4, 0)
     frame.label:SetTextColor(1, 1, 1)
 
     frame.time = frame.bar:CreateFontString(nil, "OVERLAY")
-    frame.time:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
+    frame.time:SetFont(tmpl.font, tmpl.fontSize, "OUTLINE")
     frame.time:SetPoint("RIGHT", -4, 0)
     frame.time:SetTextColor(1, 1, 1)
 
@@ -181,15 +196,17 @@ end
 function PC:ApplyTemplateStyle(templateType)
     if templateType == "text" and textDisplay then
         local tmpl = GetTemplate("text")
-        textDisplay.text:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
+        textDisplay.text:SetFont(tmpl.font, tmpl.fontSize, "OUTLINE")
         textDisplay.text:SetTextColor(tmpl.fontColor.r, tmpl.fontColor.g, tmpl.fontColor.b)
     elseif templateType == "bar" and barDisplay then
         local tmpl = GetTemplate("bar")
         barDisplay:SetSize(tmpl.width, tmpl.height)
         barDisplay:SetBackdropColor(tmpl.bgColor.r, tmpl.bgColor.g, tmpl.bgColor.b, tmpl.bgColor.a)
+        barDisplay.bar:SetStatusBarTexture(tmpl.barTexture)
         barDisplay.bar:SetStatusBarColor(tmpl.barColor.r, tmpl.barColor.g, tmpl.barColor.b)
-        barDisplay.label:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
-        barDisplay.time:SetFont("Fonts\\FRIZQT__.TTF", tmpl.fontSize, "OUTLINE")
+        barDisplay.bar.bg:SetTexture(tmpl.barTexture)
+        barDisplay.label:SetFont(tmpl.font, tmpl.fontSize, "OUTLINE")
+        barDisplay.time:SetFont(tmpl.font, tmpl.fontSize, "OUTLINE")
     end
 end
 
