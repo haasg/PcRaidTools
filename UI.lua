@@ -602,66 +602,82 @@ end
 -- Timer Template Panels (Config tab)
 ----------------------------------------
 
+-- Helper: creates a clickable color swatch that opens WoW's color picker
+local function CreateColorSwatch(parent, label, initialColor, x, y, onChange)
+    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    colorLabel:SetPoint("TOPLEFT", x, y)
+    colorLabel:SetText(label .. ":")
+
+    local swatch = CreateFrame("Button", nil, parent)
+    swatch:SetSize(22, 22)
+    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
+
+    swatch.tex = swatch:CreateTexture(nil, "ARTWORK")
+    swatch.tex:SetAllPoints()
+    swatch.tex:SetColorTexture(initialColor.r, initialColor.g, initialColor.b)
+
+    swatch.border = swatch:CreateTexture(nil, "OVERLAY")
+    swatch.border:SetPoint("TOPLEFT", -1, 1)
+    swatch.border:SetPoint("BOTTOMRIGHT", 1, -1)
+    swatch.border:SetColorTexture(0.5, 0.5, 0.5, 1)
+    swatch.tex:SetDrawLayer("OVERLAY", 1)
+
+    swatch:SetScript("OnClick", function()
+        local prev = { r = initialColor.r, g = initialColor.g, b = initialColor.b }
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = initialColor.r,
+            g = initialColor.g,
+            b = initialColor.b,
+            swatchFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                initialColor.r = r
+                initialColor.g = g
+                initialColor.b = b
+                swatch.tex:SetColorTexture(r, g, b)
+                onChange(initialColor)
+            end,
+            cancelFunc = function()
+                initialColor.r = prev.r
+                initialColor.g = prev.g
+                initialColor.b = prev.b
+                swatch.tex:SetColorTexture(prev.r, prev.g, prev.b)
+                onChange(initialColor)
+            end,
+        })
+    end)
+
+    return swatch
+end
+
 function PC:BuildTextTemplatePanel(parent)
     local tmpl = self:GetTimerTemplate("text")
 
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 0, 0)
-    header:SetText("Text Timer Template")
+    header:SetText("Text Timer")
 
-    local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    desc:SetPoint("TOPLEFT", 0, -22)
-    desc:SetText("|cff888888Style for all text countdown displays (e.g. Bait)|r")
-
-    -- Anchor button
     local anchorBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    anchorBtn:SetSize(130, 22)
-    anchorBtn:SetPoint("TOPLEFT", 0, -46)
+    anchorBtn:SetSize(120, 20)
+    anchorBtn:SetPoint("LEFT", header, "RIGHT", 12, 0)
     anchorBtn:SetText("Toggle Anchors")
     anchorBtn:SetScript("OnClick", function()
         PC:ToggleTimerAnchors()
     end)
 
     -- Font Size
-    CreateSlider(parent, "Font Size", 12, 48, 1, tmpl.fontSize, 0, -90, function(val)
+    CreateSlider(parent, "Font Size", 12, 48, 1, tmpl.fontSize, 0, -40, function(val)
         PC:SaveTimerTemplateSetting("text", "fontSize", val)
     end)
 
     -- Font Color
-    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    colorLabel:SetPoint("TOPLEFT", 0, -130)
-    colorLabel:SetText("Font Color:")
-
-    local swatch = parent:CreateTexture(nil, "ARTWORK")
-    swatch:SetSize(20, 20)
-    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
-    swatch:SetColorTexture(tmpl.fontColor.r, tmpl.fontColor.g, tmpl.fontColor.b)
-
-    CreateSlider(parent, "R", 0, 1, 0.05, tmpl.fontColor.r, 0, -158, function(val)
-        local c = PC:GetTimerTemplate("text").fontColor
-        c.r = val
+    CreateColorSwatch(parent, "Font Color", tmpl.fontColor, 0, -82, function(c)
         PC:SaveTimerTemplateSetting("text", "fontColor", c)
-        swatch:SetColorTexture(c.r, c.g, c.b)
     end)
 
-    CreateSlider(parent, "G", 0, 1, 0.05, tmpl.fontColor.g, 0, -194, function(val)
-        local c = PC:GetTimerTemplate("text").fontColor
-        c.g = val
-        PC:SaveTimerTemplateSetting("text", "fontColor", c)
-        swatch:SetColorTexture(c.r, c.g, c.b)
-    end)
-
-    CreateSlider(parent, "B", 0, 1, 0.05, tmpl.fontColor.b, 0, -230, function(val)
-        local c = PC:GetTimerTemplate("text").fontColor
-        c.b = val
-        PC:SaveTimerTemplateSetting("text", "fontColor", c)
-        swatch:SetColorTexture(c.r, c.g, c.b)
-    end)
-
-    -- Test button
+    -- Preview button
     local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, -270)
+    testBtn:SetPoint("TOPLEFT", 0, -114)
     testBtn:SetText("Preview")
     testBtn:SetScript("OnClick", function()
         PC:TestBossTimer("Cosmos.Explosion")
@@ -673,102 +689,45 @@ function PC:BuildBarTemplatePanel(parent)
 
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     header:SetPoint("TOPLEFT", 0, 0)
-    header:SetText("Bar Timer Template")
+    header:SetText("Bar Timer")
 
-    local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    desc:SetPoint("TOPLEFT", 0, -22)
-    desc:SetText("|cff888888Style for all bar timer displays (e.g. Explosion)|r")
-
-    -- Anchor button
     local anchorBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    anchorBtn:SetSize(130, 22)
-    anchorBtn:SetPoint("TOPLEFT", 0, -46)
+    anchorBtn:SetSize(120, 20)
+    anchorBtn:SetPoint("LEFT", header, "RIGHT", 12, 0)
     anchorBtn:SetText("Toggle Anchors")
     anchorBtn:SetScript("OnClick", function()
         PC:ToggleTimerAnchors()
     end)
 
     -- Width
-    CreateSlider(parent, "Width", 150, 400, 5, tmpl.width, 0, -90, function(val)
+    CreateSlider(parent, "Width", 150, 400, 5, tmpl.width, 0, -40, function(val)
         PC:SaveTimerTemplateSetting("bar", "width", val)
     end)
 
     -- Height
-    CreateSlider(parent, "Height", 14, 40, 1, tmpl.height, 0, -126, function(val)
+    CreateSlider(parent, "Height", 14, 40, 1, tmpl.height, 0, -76, function(val)
         PC:SaveTimerTemplateSetting("bar", "height", val)
     end)
 
     -- Font Size
-    CreateSlider(parent, "Font Size", 8, 24, 1, tmpl.fontSize, 0, -162, function(val)
+    CreateSlider(parent, "Font Size", 8, 24, 1, tmpl.fontSize, 0, -112, function(val)
         PC:SaveTimerTemplateSetting("bar", "fontSize", val)
     end)
 
     -- Bar Color
-    local barColorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    barColorLabel:SetPoint("TOPLEFT", 0, -200)
-    barColorLabel:SetText("Bar Color:")
-
-    local barSwatch = parent:CreateTexture(nil, "ARTWORK")
-    barSwatch:SetSize(20, 20)
-    barSwatch:SetPoint("LEFT", barColorLabel, "RIGHT", 6, 0)
-    barSwatch:SetColorTexture(tmpl.barColor.r, tmpl.barColor.g, tmpl.barColor.b)
-
-    CreateSlider(parent, "R", 0, 1, 0.05, tmpl.barColor.r, 0, -228, function(val)
-        local c = PC:GetTimerTemplate("bar").barColor
-        c.r = val
+    CreateColorSwatch(parent, "Bar Color", tmpl.barColor, 0, -154, function(c)
         PC:SaveTimerTemplateSetting("bar", "barColor", c)
-        barSwatch:SetColorTexture(c.r, c.g, c.b)
-    end)
-
-    CreateSlider(parent, "G", 0, 1, 0.05, tmpl.barColor.g, 0, -264, function(val)
-        local c = PC:GetTimerTemplate("bar").barColor
-        c.g = val
-        PC:SaveTimerTemplateSetting("bar", "barColor", c)
-        barSwatch:SetColorTexture(c.r, c.g, c.b)
-    end)
-
-    CreateSlider(parent, "B", 0, 1, 0.05, tmpl.barColor.b, 0, -300, function(val)
-        local c = PC:GetTimerTemplate("bar").barColor
-        c.b = val
-        PC:SaveTimerTemplateSetting("bar", "barColor", c)
-        barSwatch:SetColorTexture(c.r, c.g, c.b)
     end)
 
     -- Background Color
-    local bgColorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    bgColorLabel:SetPoint("TOPLEFT", 0, -340)
-    bgColorLabel:SetText("Background Color:")
-
-    local bgSwatch = parent:CreateTexture(nil, "ARTWORK")
-    bgSwatch:SetSize(20, 20)
-    bgSwatch:SetPoint("LEFT", bgColorLabel, "RIGHT", 6, 0)
-    bgSwatch:SetColorTexture(tmpl.bgColor.r, tmpl.bgColor.g, tmpl.bgColor.b)
-
-    CreateSlider(parent, "R", 0, 1, 0.05, tmpl.bgColor.r, 0, -368, function(val)
-        local c = PC:GetTimerTemplate("bar").bgColor
-        c.r = val
+    CreateColorSwatch(parent, "Background", tmpl.bgColor, 0, -180, function(c)
         PC:SaveTimerTemplateSetting("bar", "bgColor", c)
-        bgSwatch:SetColorTexture(c.r, c.g, c.b)
     end)
 
-    CreateSlider(parent, "G", 0, 1, 0.05, tmpl.bgColor.g, 0, -404, function(val)
-        local c = PC:GetTimerTemplate("bar").bgColor
-        c.g = val
-        PC:SaveTimerTemplateSetting("bar", "bgColor", c)
-        bgSwatch:SetColorTexture(c.r, c.g, c.b)
-    end)
-
-    CreateSlider(parent, "B", 0, 1, 0.05, tmpl.bgColor.b, 0, -440, function(val)
-        local c = PC:GetTimerTemplate("bar").bgColor
-        c.b = val
-        PC:SaveTimerTemplateSetting("bar", "bgColor", c)
-        bgSwatch:SetColorTexture(c.r, c.g, c.b)
-    end)
-
-    -- Test button
+    -- Preview button
     local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, -480)
+    testBtn:SetPoint("TOPLEFT", 0, -214)
     testBtn:SetText("Preview")
     testBtn:SetScript("OnClick", function()
         PC:TestBossTimer("Cosmos.Explosion")
