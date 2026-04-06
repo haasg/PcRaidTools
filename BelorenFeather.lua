@@ -64,7 +64,7 @@ local function CheckFeatherDebuff()
     for i = 1, 40 do
         local aura = C_UnitAuras.GetDebuffDataByIndex("player", i)
         if not aura then break end
-        if aura.spellId == LIGHT_FEATHER or aura.spellId == VOID_FEATHER then
+        if not (issecretvalue and issecretvalue(aura.spellId)) and (aura.spellId == LIGHT_FEATHER or aura.spellId == VOID_FEATHER) then
             if activeSpellId ~= aura.spellId then
                 activeSpellId = aura.spellId
                 local info = C_Spell.GetSpellInfo(aura.spellId)
