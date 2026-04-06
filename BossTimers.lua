@@ -5,10 +5,14 @@ local addonName, PC = ...
 -- Uses Blizzard's Encounter Timeline API
 ----------------------------------------
 
+-- Timeline event log (for debug panel)
+PC.timelineLog = {}
+PC.timelineLogging = false
+
 -- Timer rules: keyed by "Boss.Mechanic"
 PC.bossTimerRules = {
     ["Cosmos.Explosion"] = {
-        enabled = true,
+        enabled = false,
         triggers = {
             {
                 type = "text",
@@ -21,13 +25,14 @@ PC.bossTimerRules = {
                 label = "Explosion",
                 duration = 14,
                 startAt = -3, -- start 3s after timeline ends (when bait finishes)
+                markers = { { time = 6, color = {1, 1, 1, 0.8} } },
             },
         },
         spellId = 1255368,
-        matchDurations = {12, 60, 39, 11.5, 14, 16, 20},
+        matchDurations = {12, 39.5},
     },
     ["Cosmos.Immune"] = {
-        enabled = true,
+        enabled = false,
         triggers = {
             {
                 type = "text",
@@ -168,6 +173,18 @@ local function CreateBarDisplay()
     frame.time:SetPoint("RIGHT", -4, 0)
     frame.time:SetTextColor(1, 1, 1)
 
+    -- Marker line pool (reusable thin vertical lines)
+    frame.markers = {}
+    for i = 1, 4 do
+        local marker = frame.bar:CreateTexture(nil, "OVERLAY", nil, 2)
+        marker:SetWidth(2)
+        marker:SetPoint("TOP")
+        marker:SetPoint("BOTTOM")
+        marker:SetColorTexture(1, 1, 1, 0.8)
+        marker:Hide()
+        frame.markers[i] = marker
+    end
+
     return frame
 end
 
@@ -238,6 +255,29 @@ local function ShowBarTimer(trigger)
     barDisplay.label:SetText(trigger.label)
     barDisplay.time:SetText(string.format("%.1f", trigger.duration))
     barDisplay.bar:SetValue(1)
+
+    -- Position markers
+    for i, marker in ipairs(barDisplay.markers) do
+        marker:Hide()
+    end
+    if trigger.markers then
+        local barWidth = barDisplay.bar:GetWidth()
+        for i, m in ipairs(trigger.markers) do
+            local marker = barDisplay.markers[i]
+            if marker then
+                local frac = m.time / trigger.duration
+                local xOffset = frac * barWidth
+                marker:ClearAllPoints()
+                marker:SetPoint("TOP", barDisplay.bar, "TOPLEFT", xOffset, 0)
+                marker:SetPoint("BOTTOM", barDisplay.bar, "BOTTOMLEFT", xOffset, 0)
+                if m.color then
+                    marker:SetColorTexture(m.color[1], m.color[2], m.color[3], m.color[4] or 1)
+                end
+                marker:Show()
+            end
+        end
+    end
+
     barDisplay:Show()
     activeDisplays[#activeDisplays + 1] = display
 end
@@ -328,7 +368,49 @@ end
 -- Event Handlers
 ----------------------------------------
 
+local function IsSecret(val)
+    return val ~= nil and issecretvalue and issecretvalue(val)
+end
+
+local function LogTimelineEvent(eventType, eventInfo, eventID, extra)
+    if not PC.timelineLogging then return end
+    local entry = {
+        time = GetTime(),
+        type = eventType,
+        id = eventInfo and eventInfo.id or eventID,
+        duration = eventInfo and eventInfo.duration or nil,
+        spellName = eventInfo and eventInfo.spellName or nil,
+        spellID = eventInfo and eventInfo.spellID or nil,
+        source = eventInfo and eventInfo.source or nil,
+        iconFileID = eventInfo and eventInfo.iconFileID or nil,
+        extra = extra,
+        secrets = eventInfo and {
+            id = IsSecret(eventInfo.id),
+            duration = IsSecret(eventInfo.duration),
+            spellName = IsSecret(eventInfo.spellName),
+            spellID = IsSecret(eventInfo.spellID),
+            source = IsSecret(eventInfo.source),
+        } or nil,
+    }
+    PC.timelineLog[#PC.timelineLog + 1] = entry
+    PC.timelineLogDirty = true
+end
+
 local function OnTimelineEventAdded(_, eventInfo)
+    -- Payload may be a table (eventInfo) or a number (eventID)
+    if type(eventInfo) == "number" then
+        local eventID = eventInfo
+        eventInfo = C_EncounterTimeline and C_EncounterTimeline.GetEventInfo(eventID)
+        if not eventInfo then
+            eventInfo = { id = eventID }
+        else
+            eventInfo.id = eventID
+        end
+    end
+
+    -- Log every timeline event regardless of match
+    LogTimelineEvent("ADDED", eventInfo)
+
     local ruleKey, rule = MatchTimelineEvent(eventInfo)
     if not ruleKey then return end
 
@@ -340,16 +422,21 @@ local function OnTimelineEventAdded(_, eventInfo)
     }
     StartTicking()
 
+    LogTimelineEvent("MATCHED", eventInfo, nil, ruleKey)
+
     if PC.debugMode then
         print("|cff00ccff[PC Timer]|r Matched " .. ruleKey .. " - timeline " .. string.format("%.1f", eventInfo.duration) .. "s (id=" .. eventInfo.id .. ")")
     end
 end
 
 local function OnTimelineStateChanged(_, eventID)
+    local state = C_EncounterTimeline and C_EncounterTimeline.GetEventState(eventID)
+    local stateNames = { [0] = "Active", [1] = "Paused", [2] = "Finished", [3] = "Canceled" }
+    LogTimelineEvent("STATE", nil, eventID, stateNames[state] or tostring(state))
+
     local ev = activeEvents[eventID]
     if not ev then return end
 
-    local state = C_EncounterTimeline and C_EncounterTimeline.GetEventState(eventID)
     if state == 3 then -- Canceled
         activeEvents[eventID] = nil
         if PC.debugMode then
@@ -359,6 +446,7 @@ local function OnTimelineStateChanged(_, eventID)
 end
 
 local function OnTimelineEventRemoved(_, eventID)
+    LogTimelineEvent("REMOVED", nil, eventID)
     activeEvents[eventID] = nil
 end
 
@@ -371,11 +459,74 @@ local function ClearAllTimers()
     tickFrame:Hide()
 end
 
-local function OnEncounterEnd()
-    ClearAllTimers()
-    if PC.debugMode then
-        print("|cff00ccff[PC Timer]|r Encounter ended, timers cleared")
+local function OnEncounterEnd(_, ...)
+    if PC.timelineLogging then
+        local encounterID, encounterName, difficultyID, groupSize, success = ...
+        PC.timelineLog[#PC.timelineLog + 1] = {
+            time = GetTime(),
+            type = "ENCOUNTER_END",
+            extra = (encounterName or "?") .. " " .. (success == 1 and "KILL" or "WIPE"),
+        }
     end
+    ClearAllTimers()
+    if PC.timelineLogDirty and PC.RefreshTimelineLog then
+        PC.timelineLogDirty = false
+        PC:RefreshTimelineLog()
+    end
+end
+
+local function OnEncounterStart(_, ...)
+    if PC.timelineLogging then
+        local encounterID, encounterName, difficultyID, groupSize = ...
+        PC.timelineLog[#PC.timelineLog + 1] = {
+            time = GetTime(),
+            type = "ENCOUNTER_START",
+            extra = (encounterName or "?") .. " (diff=" .. tostring(difficultyID) .. " size=" .. tostring(groupSize) .. ")",
+        }
+    end
+end
+
+local function SafeStr(val)
+    if val == nil then return "nil" end
+    if issecretvalue and issecretvalue(val) then return "SECRET" end
+    local ok, str = pcall(tostring, val)
+    return ok and str or "error"
+end
+
+local function OnBossCast(event, unit, castGUID, spellID)
+    if not PC.timelineLogging then return end
+
+    local name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible, sID
+    local ok, err = pcall(function()
+        name, text, texture, startTimeMS, endTimeMS, isTradeSkill, castID, notInterruptible, sID = UnitCastingInfo(unit)
+    end)
+
+    local duration = nil
+    local durationSecret = false
+    if ok and startTimeMS and endTimeMS then
+        if IsSecret(startTimeMS) or IsSecret(endTimeMS) then
+            durationSecret = true
+        else
+            duration = (endTimeMS - startTimeMS) / 1000
+        end
+    end
+
+    PC.timelineLog[#PC.timelineLog + 1] = {
+        time = GetTime(),
+        type = "CAST_" .. event:gsub("UNIT_SPELLCAST_", ""),
+        castUnit = SafeStr(unit),
+        spellName = SafeStr(name),
+        spellID = SafeStr(spellID),
+        duration = duration,
+        notInterruptible = SafeStr(notInterruptible),
+        secrets = {
+            spellName = IsSecret(name),
+            spellID = IsSecret(spellID),
+            duration = durationSecret,
+            notInterruptible = IsSecret(notInterruptible),
+        },
+    }
+    PC.timelineLogDirty = true
 end
 
 ----------------------------------------
@@ -386,16 +537,48 @@ local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("ENCOUNTER_TIMELINE_EVENT_ADDED")
 eventFrame:RegisterEvent("ENCOUNTER_TIMELINE_EVENT_STATE_CHANGED")
 eventFrame:RegisterEvent("ENCOUNTER_TIMELINE_EVENT_REMOVED")
+eventFrame:RegisterEvent("ENCOUNTER_START")
 eventFrame:RegisterEvent("ENCOUNTER_END")
+eventFrame:RegisterEvent("UNIT_SPELLCAST_START")
+eventFrame:RegisterEvent("UNIT_SPELLCAST_STOP")
+eventFrame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
+eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 eventFrame:SetScript("OnEvent", function(self, event, ...)
+    -- Dump raw payloads for timeline events
+    if PC.timelineLogging and event:find("ENCOUNTER_TIMELINE") then
+        local args = {...}
+        local parts = {}
+        for i, v in ipairs(args) do
+            if type(v) == "table" then
+                local fields = {}
+                for k, val in pairs(v) do fields[#fields + 1] = tostring(k) .. "=" .. SafeStr(val) end
+                parts[i] = "{" .. table.concat(fields, ", ") .. "}"
+            else
+                parts[i] = type(v) .. ":" .. SafeStr(v)
+            end
+        end
+        PC.timelineLog[#PC.timelineLog + 1] = {
+            time = GetTime(),
+            type = "RAW",
+            extra = event .. " -> " .. table.concat(parts, " | "),
+        }
+        PC.timelineLogDirty = true
+    end
     if event == "ENCOUNTER_TIMELINE_EVENT_ADDED" then
         OnTimelineEventAdded(event, ...)
     elseif event == "ENCOUNTER_TIMELINE_EVENT_STATE_CHANGED" then
         OnTimelineStateChanged(event, ...)
     elseif event == "ENCOUNTER_TIMELINE_EVENT_REMOVED" then
         OnTimelineEventRemoved(event, ...)
+    elseif event == "ENCOUNTER_START" then
+        OnEncounterStart(event, ...)
     elseif event == "ENCOUNTER_END" then
-        OnEncounterEnd()
+        OnEncounterEnd(event, ...)
+    elseif event:find("UNIT_SPELLCAST_") then
+        local unit = ...
+        if unit and unit:find("^boss") then
+            OnBossCast(event, ...)
+        end
     end
 end)
 
