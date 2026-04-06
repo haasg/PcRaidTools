@@ -13,8 +13,8 @@ local DEFAULT_ICON_SIZE = 48
 local MAX_ICONS = 6
 local ICON_SPACING = 4
 
-local LEM_ref = nil
 local featherDebug = false
+local isUnlocked = false
 
 -- Tracked debuffs: [auraInstanceID] = iconIndex
 local activeDebuffs = {}
@@ -100,8 +100,8 @@ local function ShowExample()
     anchorFrame:Show()
 end
 
-local function IsInEditMode()
-    return LEM_ref and LEM_ref:IsInEditMode()
+local function IsUnlocked()
+    return isUnlocked
 end
 
 local function IsEnabled()
@@ -134,14 +134,14 @@ local function RefreshDisplay()
     if idx > 0 then
         anchorFrame:Show()
     else
-        if not IsInEditMode() then
+        if not IsUnlocked() then
             anchorFrame:Hide()
         end
     end
 end
 
 local function HideAll()
-    if IsInEditMode() then return end
+    if IsUnlocked() then return end
     wipe(activeDebuffs)
     activeCount = 0
     for i = 1, MAX_ICONS do
@@ -151,7 +151,7 @@ local function HideAll()
 end
 
 local function HandleFullUpdate()
-    if IsInEditMode() then return end
+    if IsUnlocked() then return end
 
     wipe(activeDebuffs)
 
@@ -184,7 +184,7 @@ local function HandleFullUpdate()
 end
 
 local function HandleAddedAuras(addedAuras)
-    if IsInEditMode() then return end
+    if IsUnlocked() then return end
 
     local changed = false
     for _, auraData in ipairs(addedAuras) do
@@ -239,7 +239,7 @@ local function HandleAddedAuras(addedAuras)
 end
 
 local function HandleRemovedAuras(removedIDs)
-    if IsInEditMode() then return end
+    if IsUnlocked() then return end
 
     local changed = false
     for _, auraInstanceID in ipairs(removedIDs) do
@@ -285,37 +285,62 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
 end)
 
 ----------------------------------------
--- Edit Mode Integration (LibEditMode)
+-- Position / Size Management
 ----------------------------------------
 
-local editModeFrame = CreateFrame("Frame")
-editModeFrame:RegisterEvent("PLAYER_LOGIN")
-editModeFrame:SetScript("OnEvent", function()
+local function SavePosition()
+    local point, _, _, x, y = anchorFrame:GetPoint(1)
+    PcRaidToolsDB.feather = PcRaidToolsDB.feather or {}
+    PcRaidToolsDB.feather.point = point
+    PcRaidToolsDB.feather.x = x
+    PcRaidToolsDB.feather.y = y
+end
+
+local function LoadPosition()
     PcRaidToolsDB = PcRaidToolsDB or {}
     PcRaidToolsDB.feather = PcRaidToolsDB.feather or {}
+    local data = PcRaidToolsDB.feather
+    local point = data.point or "CENTER"
+    local x = data.x or 0
+    local y = data.y or 200
+    anchorFrame:ClearAllPoints()
+    anchorFrame:SetPoint(point, UIParent, point, x, y)
+    ChangeIconSize(data.iconSize or DEFAULT_ICON_SIZE)
+end
 
-    local defaultData = {
-        point = "CENTER",
-        x = 0,
-        y = 200,
-        iconSize = DEFAULT_ICON_SIZE,
-    }
+anchorFrame:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    SavePosition()
+end)
 
-    local function displayPositionChanged(frame, layout, point, x, y)
-        PcRaidToolsDB.feather[layout] = PcRaidToolsDB.feather[layout] or CopyTable(defaultData)
-        PcRaidToolsDB.feather[layout].point = point
-        PcRaidToolsDB.feather[layout].x = x
-        PcRaidToolsDB.feather[layout].y = y
-    end
+local initFrame = CreateFrame("Frame")
+initFrame:RegisterEvent("PLAYER_LOGIN")
+initFrame:SetScript("OnEvent", function()
+    LoadPosition()
+    PC.featherFrame = anchorFrame
+end)
 
-    local LEM = LibStub("LibEditMode")
-    LEM_ref = LEM
+----------------------------------------
+-- Config helpers (called from UI.lua)
+----------------------------------------
 
-    LEM:RegisterCallback("enter", function()
+function PC:SetFeatherUnlocked(unlock)
+    isUnlocked = unlock
+    if unlock then
+        anchorFrame:SetMovable(true)
+        anchorFrame:RegisterForDrag("LeftButton")
+        anchorFrame:EnableMouse(true)
+        anchorFrame:SetScript("OnDragStart", function(self)
+            if not InCombatLockdown() then
+                self:StartMoving()
+            end
+        end)
         ShowExample()
-    end)
-
-    LEM:RegisterCallback("exit", function()
+    else
+        anchorFrame:SetMovable(false)
+        anchorFrame:RegisterForDrag()
+        anchorFrame:EnableMouse(false)
+        anchorFrame:SetScript("OnDragStart", nil)
         if next(activeDebuffs) == nil then
             for i = 1, MAX_ICONS do
                 iconFrames[i]:Hide()
@@ -323,45 +348,25 @@ editModeFrame:SetScript("OnEvent", function()
             activeCount = 0
             anchorFrame:Hide()
         end
-    end)
+    end
+end
 
-    LEM:RegisterCallback("layout", function(layout)
-        if not PcRaidToolsDB.feather[layout] then
-            PcRaidToolsDB.feather[layout] = CopyTable(defaultData)
-        end
-        local data = PcRaidToolsDB.feather[layout]
-        anchorFrame:ClearAllPoints()
-        anchorFrame:SetPoint(data.point, data.x, data.y)
-        ChangeIconSize(data.iconSize)
-    end)
+function PC:IsFeatherUnlocked()
+    return isUnlocked
+end
 
-    LEM:AddFrame(anchorFrame, displayPositionChanged, defaultData)
+function PC:SetFeatherIconSize(value)
+    PcRaidToolsDB = PcRaidToolsDB or {}
+    PcRaidToolsDB.feather = PcRaidToolsDB.feather or {}
+    PcRaidToolsDB.feather.iconSize = value
+    ChangeIconSize(value)
+end
 
-    LEM:AddFrameSettings(anchorFrame, {
-        {
-            name = "Icon Size",
-            kind = LEM.SettingType.Slider,
-            default = defaultData.iconSize,
-            get = function(layout)
-                return PcRaidToolsDB.feather[layout] and PcRaidToolsDB.feather[layout].iconSize or defaultData.iconSize
-            end,
-            set = function(layout, value)
-                PcRaidToolsDB.feather[layout] = PcRaidToolsDB.feather[layout] or CopyTable(defaultData)
-                PcRaidToolsDB.feather[layout].iconSize = value
-                ChangeIconSize(value)
-            end,
-            minValue = 20,
-            maxValue = 80,
-            valueStep = 1,
-        },
-    })
-
-    PC.featherFrame = anchorFrame
-end)
-
-----------------------------------------
--- Config helpers (called from UI.lua)
-----------------------------------------
+function PC:GetFeatherIconSize()
+    PcRaidToolsDB = PcRaidToolsDB or {}
+    PcRaidToolsDB.feather = PcRaidToolsDB.feather or {}
+    return PcRaidToolsDB.feather.iconSize or DEFAULT_ICON_SIZE
+end
 
 function PC:ToggleFeatherDebug()
     featherDebug = not featherDebug
@@ -373,7 +378,7 @@ function PC:ShowFeatherPreview()
 end
 
 function PC:HideFeatherPreview()
-    if next(activeDebuffs) == nil and not IsInEditMode() then
+    if next(activeDebuffs) == nil and not IsUnlocked() then
         for i = 1, MAX_ICONS do
             iconFrames[i]:Hide()
         end
