@@ -104,6 +104,10 @@ local function IsInEditMode()
     return LEM_ref and LEM_ref:IsInEditMode()
 end
 
+local function IsEnabled()
+    return PcRaidToolsDB and PcRaidToolsDB.featherEnabled ~= false
+end
+
 ----------------------------------------
 -- Aura Tracking
 ----------------------------------------
@@ -263,6 +267,7 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
         HideAll()
         return
     elseif event == "UNIT_AURA" then
+        if not IsEnabled() then return end
         local unit, updateInfo = ...
         if unit ~= "player" or not updateInfo then return end
 
@@ -363,11 +368,16 @@ function PC:ToggleFeatherDebug()
     print("|cff00ccff[PcRaidTools]|r Feather debug " .. (featherDebug and "ON" or "OFF"))
 end
 
-function PC:TestFeatherIndicator()
+function PC:ShowFeatherPreview()
     ShowExample()
-    C_Timer.After(3, function()
-        if activeCount == 0 and not IsInEditMode() then
-            anchorFrame:Hide()
+end
+
+function PC:HideFeatherPreview()
+    if next(activeDebuffs) == nil and not IsInEditMode() then
+        for i = 1, MAX_ICONS do
+            iconFrames[i]:Hide()
         end
-    end)
+        activeCount = 0
+        anchorFrame:Hide()
+    end
 end

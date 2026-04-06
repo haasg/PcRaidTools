@@ -121,14 +121,6 @@ local raidBossData = {
             { key = "Feather", label = "Feather" },
         },
     },
-    {
-        key = "Cosmos",
-        label = "Cosmos",
-        mechanics = {
-            { key = "Explosion", label = "Explosion" },
-            { key = "Immune", label = "Immune" },
-        },
-    },
 }
 
 local function LayoutRaidSidebar()
@@ -375,8 +367,6 @@ function PC:CreateMainWindow()
     CreateRaidSidebarLayout(tabContents["Raid"])
     self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
     self:BuildFeatherPanel(raidPanels["Beloren.Feather"])
-    self:BuildExplosionPanel(raidPanels["Cosmos.Explosion"])
-    self:BuildMechanicPanel(raidPanels["Cosmos.Immune"], "Cosmos.Immune", "Immune Timer")
 
     -- Build Config tab with sidebar (Text, Bar templates)
     CreateSidebarLayout(tabContents["Config"], { "Text", "Bar" }, configEntries, configPanels, function(name)
@@ -737,6 +727,21 @@ function PC:BuildFeatherPanel(parent)
     header:SetText("Feather Indicator")
     y = y - 28
 
+    -- Enable checkbox
+    PcRaidToolsDB = PcRaidToolsDB or {}
+    if PcRaidToolsDB.featherEnabled == nil then PcRaidToolsDB.featherEnabled = true end
+
+    local enableCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    enableCheck:SetPoint("TOPLEFT", 0, y)
+    enableCheck:SetChecked(PcRaidToolsDB.featherEnabled)
+    enableCheck:SetScript("OnClick", function(self)
+        PcRaidToolsDB.featherEnabled = self:GetChecked()
+    end)
+    local enableLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    enableLabel:SetPoint("LEFT", enableCheck, "RIGHT", 4, 0)
+    enableLabel:SetText("Enabled")
+    y = y - 30
+
     local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     desc:SetPoint("TOPLEFT", 0, y)
     desc:SetText("Shows Light Feather or Void Feather debuff icon on your screen.")
@@ -747,18 +752,21 @@ function PC:BuildFeatherPanel(parent)
     desc2:SetText("|cffaaaaaaPosition and size are configured via Edit Mode (Esc > Edit Mode).|r")
     y = y - 30
 
-    -- Test button
-    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    testBtn:SetSize(80, 22)
-    testBtn:SetPoint("TOPLEFT", 0, y)
-    testBtn:SetText("Test")
-    testBtn:SetScript("OnClick", function()
-        PC:TestFeatherIndicator()
+    local showBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    showBtn:SetSize(80, 22)
+    showBtn:SetPoint("TOPLEFT", 0, y)
+    showBtn:SetText("Show")
+    showBtn:SetScript("OnClick", function()
+        PC:ShowFeatherPreview()
     end)
 
-    local testLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    testLabel:SetPoint("LEFT", testBtn, "RIGHT", 8, 0)
-    testLabel:SetText("|cffaaaaaaShows indicator for 3 seconds|r")
+    local hideBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    hideBtn:SetSize(80, 22)
+    hideBtn:SetPoint("LEFT", showBtn, "RIGHT", 8, 0)
+    hideBtn:SetText("Hide")
+    hideBtn:SetScript("OnClick", function()
+        PC:HideFeatherPreview()
+    end)
 end
 
 ----------------------------------------

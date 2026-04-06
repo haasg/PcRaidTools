@@ -2,7 +2,7 @@
 ## Title: PcRaidTools
 ## Notes: A suite of tools for WoW raiding
 ## Author: Pc
-## Version: 0.2.0
+## Version: 0.2.1
 ## SavedVariables: PcRaidToolsDB
 
 libs/LibStub/LibStub.lua
