@@ -168,7 +168,9 @@ local function HandleFullUpdate()
                 .. " icon=" .. SafeStr(auraData.icon))
         end
         if auraData and auraData.spellId then
-            if auraData.expirationTime and issecretvalue and issecretvalue(auraData.expirationTime) then
+            local IsFiltered = C_UnitAuras.IsAuraFilteredOutByInstanceID
+            local passPlayer = not IsFiltered("player", auraInstanceID, "HARMFUL|PLAYER")
+            if not passPlayer and auraData.expirationTime and issecretvalue and issecretvalue(auraData.expirationTime) then
                 activeDebuffs[auraInstanceID] = true
             end
         end
@@ -217,11 +219,13 @@ local function HandleAddedAuras(addedAuras)
                 .. " PLAYER=" .. tostring(passPlayer)
                 .. " NOT_CANCEL=" .. tostring(passNotCancel) .. "|r")
 
-            if auraData.expirationTime and issecretvalue and issecretvalue(auraData.expirationTime) then
+            if passPlayer then
+                DebugPrint("  SKIPPED (PLAYER=true, player-cast)")
+            elseif not (auraData.expirationTime and issecretvalue and issecretvalue(auraData.expirationTime)) then
+                DebugPrint("  SKIPPED (expirationTime not secret)")
+            else
                 activeDebuffs[id] = true
                 changed = true
-            else
-                DebugPrint("  SKIPPED (expirationTime not secret)")
             end
         end
     end
