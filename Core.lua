@@ -63,6 +63,8 @@ SlashCmdList["PCRAIDTOOLS"] = function(msg)
             end
             print("  myTarget would be: " .. tostring(affected[PC.myHealerIndex]))
         end
+    elseif cmd == "feather" then
+        PC:ToggleFeatherDebug()
     elseif cmd == "timers" then
         PC:ToggleTimerAnchors()
     elseif cmd == "testcleu" then
