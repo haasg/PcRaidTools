@@ -5,10 +5,14 @@
 ## Version: 0.1.0
 ## SavedVariables: PcRaidToolsDB
 
+libs/LibStub/LibStub.lua
+libs/LibEditMode/embed.xml
+
 Core.lua
 MRTNote.lua
 DebuffTracker.lua
 FrameGlow.lua
 DispelAssign.lua
 BossTimers.lua
+BelorenFeather.lua
 UI.lua

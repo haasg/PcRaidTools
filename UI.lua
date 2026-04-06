@@ -115,6 +115,13 @@ local raidBossData = {
         },
     },
     {
+        key = "Beloren",
+        label = "Belo'ren",
+        mechanics = {
+            { key = "Feather", label = "Feather" },
+        },
+    },
+    {
         key = "Cosmos",
         label = "Cosmos",
         mechanics = {
@@ -367,6 +374,7 @@ function PC:CreateMainWindow()
     -- Build Raid tab with boss hierarchy sidebar
     CreateRaidSidebarLayout(tabContents["Raid"])
     self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
+    self:BuildFeatherPanel(raidPanels["Beloren.Feather"])
     self:BuildExplosionPanel(raidPanels["Cosmos.Explosion"])
     self:BuildMechanicPanel(raidPanels["Cosmos.Immune"], "Cosmos.Immune", "Immune Timer")
 
@@ -715,6 +723,42 @@ function PC:BuildMechanicPanel(parent, ruleKey, title)
     clearBtn:SetScript("OnClick", function()
         PC:ClearBossTimers()
     end)
+end
+
+----------------------------------------
+-- Belo'ren Feather Panel
+----------------------------------------
+
+function PC:BuildFeatherPanel(parent)
+    local y = 0
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, y)
+    header:SetText("Feather Indicator")
+    y = y - 28
+
+    local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    desc:SetPoint("TOPLEFT", 0, y)
+    desc:SetText("Shows Light Feather or Void Feather debuff icon on your screen.")
+    y = y - 20
+
+    local desc2 = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    desc2:SetPoint("TOPLEFT", 0, y)
+    desc2:SetText("|cffaaaaaaPosition and size are configured via Edit Mode (Esc > Edit Mode).|r")
+    y = y - 30
+
+    -- Test button
+    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testBtn:SetSize(80, 22)
+    testBtn:SetPoint("TOPLEFT", 0, y)
+    testBtn:SetText("Test")
+    testBtn:SetScript("OnClick", function()
+        PC:TestFeatherIndicator()
+    end)
+
+    local testLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    testLabel:SetPoint("LEFT", testBtn, "RIGHT", 8, 0)
+    testLabel:SetText("|cffaaaaaaShows indicator for 3 seconds|r")
 end
 
 ----------------------------------------
