@@ -11,6 +11,21 @@ local tabs = {}
 local tabContents = {}
 local activeTab = nil
 
+-- Raid tab hierarchy: bosses with mechanics
+local raidBossButtons = {}   -- bossKey -> button frame
+local raidMechButtons = {}   -- "bossKey.mechKey" -> button frame
+local raidPanels = {}        -- "bossKey.mechKey" -> detail panel frame
+local activeRaidPanel = nil  -- "bossKey.mechKey"
+local raidSidebarChild = nil -- scroll child for repositioning
+
+local debugEntries = {}
+local debugPanels = {}
+local activeDebugPanel = nil
+
+local configEntries = {}
+local configPanels = {}
+local activeConfigPanel = nil
+
 local function CreateTab(parent, name, index)
     local tab = CreateFrame("Button", nil, parent)
     tab:SetSize(80, TAB_HEIGHT)
@@ -40,6 +55,249 @@ local function CreateTabContent(parent)
     return content
 end
 
+----------------------------------------
+-- Sidebar Layout Builder (flat list, used by Debug tab)
+----------------------------------------
+
+local function CreateSidebarLayout(parent, entries, entryTable, panelTable, onSelect)
+    local sidebar = CreateFrame("Frame", nil, parent)
+    sidebar:SetPoint("TOPLEFT", 0, 0)
+    sidebar:SetPoint("BOTTOMLEFT", 0, 0)
+    sidebar:SetWidth(120)
+
+    local sidebarBg = sidebar:CreateTexture(nil, "BACKGROUND")
+    sidebarBg:SetAllPoints()
+    sidebarBg:SetColorTexture(0.15, 0.15, 0.15, 0.5)
+
+    local detail = CreateFrame("Frame", nil, parent)
+    detail:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 8, 0)
+    detail:SetPoint("BOTTOMRIGHT", 0, 0)
+
+    for i, name in ipairs(entries) do
+        local btn = CreateFrame("Button", nil, sidebar)
+        btn:SetSize(110, 24)
+        btn:SetPoint("TOPLEFT", 5, -((i - 1) * 28))
+
+        btn.text = btn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        btn.text:SetPoint("LEFT", 8, 0)
+        btn.text:SetText(name)
+
+        btn.bg = btn:CreateTexture(nil, "BACKGROUND")
+        btn.bg:SetAllPoints()
+        btn.bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+
+        btn:SetScript("OnClick", function()
+            onSelect(name)
+        end)
+
+        entryTable[name] = btn
+    end
+
+    for _, name in ipairs(entries) do
+        local panel = CreateFrame("Frame", nil, detail)
+        panel:SetAllPoints()
+        panel:Hide()
+        panelTable[name] = panel
+    end
+end
+
+----------------------------------------
+-- Boss Hierarchy Sidebar (used by Raid tab)
+----------------------------------------
+
+-- Boss/mechanic definition: { bossKey, bossLabel, mechanics = { {mechKey, mechLabel}, ... } }
+local raidBossData = {
+    {
+        key = "Vanguard",
+        label = "Vanguard",
+        mechanics = {
+            { key = "Dispel", label = "Dispel" },
+        },
+    },
+    {
+        key = "Beloren",
+        label = "Belo'ren",
+        mechanics = {
+            { key = "Feather", label = "Feather" },
+        },
+    },
+    {
+        key = "Cosmos",
+        label = "Cosmos",
+        mechanics = {
+            { key = "Explosion", label = "Explosion" },
+            { key = "Immune", label = "Immune" },
+        },
+    },
+}
+
+local function LayoutRaidSidebar()
+    if not raidSidebarChild then return end
+    local yOffset = 0
+    for _, boss in ipairs(raidBossData) do
+        local bossBtn = raidBossButtons[boss.key]
+        if bossBtn then
+            bossBtn:ClearAllPoints()
+            bossBtn:SetPoint("TOPLEFT", 2, -yOffset)
+            bossBtn:Show()
+            yOffset = yOffset + 24
+        end
+        if boss.expanded then
+            for _, mech in ipairs(boss.mechanics) do
+                local fullKey = boss.key .. "." .. mech.key
+                local mechBtn = raidMechButtons[fullKey]
+                if mechBtn then
+                    mechBtn:ClearAllPoints()
+                    mechBtn:SetPoint("TOPLEFT", 12, -yOffset)
+                    mechBtn:Show()
+                    yOffset = yOffset + 22
+                end
+            end
+        else
+            for _, mech in ipairs(boss.mechanics) do
+                local fullKey = boss.key .. "." .. mech.key
+                local mechBtn = raidMechButtons[fullKey]
+                if mechBtn then
+                    mechBtn:Hide()
+                end
+            end
+        end
+        yOffset = yOffset + 2 -- small gap between bosses
+    end
+    raidSidebarChild:SetHeight(yOffset)
+end
+
+local function CreateRaidSidebarLayout(parent)
+    -- Sidebar container
+    local sidebar = CreateFrame("Frame", nil, parent)
+    sidebar:SetPoint("TOPLEFT", 0, 0)
+    sidebar:SetPoint("BOTTOMLEFT", 0, 0)
+    sidebar:SetWidth(130)
+
+    local sidebarBg = sidebar:CreateTexture(nil, "BACKGROUND")
+    sidebarBg:SetAllPoints()
+    sidebarBg:SetColorTexture(0.15, 0.15, 0.15, 0.5)
+
+    raidSidebarChild = sidebar
+
+    -- Detail area
+    local detail = CreateFrame("Frame", nil, parent)
+    detail:SetPoint("TOPLEFT", sidebar, "TOPRIGHT", 8, 0)
+    detail:SetPoint("BOTTOMRIGHT", 0, 0)
+
+    -- Create boss headers and mechanic buttons
+    for _, boss in ipairs(raidBossData) do
+        boss.expanded = true -- start expanded
+
+        -- Boss header button
+        local bossBtn = CreateFrame("Button", nil, sidebar)
+        bossBtn:SetSize(116, 22)
+
+        bossBtn.bg = bossBtn:CreateTexture(nil, "BACKGROUND")
+        bossBtn.bg:SetAllPoints()
+        bossBtn.bg:SetColorTexture(0.25, 0.2, 0.1, 0.8)
+
+        bossBtn.arrow = bossBtn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        bossBtn.arrow:SetPoint("LEFT", 4, 0)
+        bossBtn.arrow:SetText("v")
+
+        bossBtn.text = bossBtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        bossBtn.text:SetPoint("LEFT", 14, 0)
+        bossBtn.text:SetText("|cffffcc00" .. boss.label .. "|r")
+
+        bossBtn:SetScript("OnClick", function()
+            boss.expanded = not boss.expanded
+            bossBtn.arrow:SetText(boss.expanded and "v" or ">")
+            LayoutRaidSidebar()
+        end)
+
+        raidBossButtons[boss.key] = bossBtn
+
+        -- Mechanic buttons
+        for _, mech in ipairs(boss.mechanics) do
+            local fullKey = boss.key .. "." .. mech.key
+            local mechBtn = CreateFrame("Button", nil, sidebar)
+            mechBtn:SetSize(104, 20)
+
+            mechBtn.bg = mechBtn:CreateTexture(nil, "BACKGROUND")
+            mechBtn.bg:SetAllPoints()
+            mechBtn.bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+
+            mechBtn.text = mechBtn:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            mechBtn.text:SetPoint("LEFT", 6, 0)
+            mechBtn.text:SetText(mech.label)
+
+            mechBtn:SetScript("OnClick", function()
+                PC:SelectRaidPanel(fullKey)
+            end)
+
+            raidMechButtons[fullKey] = mechBtn
+
+            -- Detail panel
+            local panel = CreateFrame("Frame", nil, detail)
+            panel:SetAllPoints()
+            panel:Hide()
+            raidPanels[fullKey] = panel
+        end
+    end
+
+    LayoutRaidSidebar()
+end
+
+----------------------------------------
+-- Sub-panel Selection
+----------------------------------------
+
+function PC:SelectRaidPanel(fullKey)
+    for panelName, panel in pairs(raidPanels) do
+        panel:Hide()
+        if raidMechButtons[panelName] then
+            raidMechButtons[panelName].bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+            raidMechButtons[panelName].text:SetTextColor(0.6, 0.6, 0.6)
+        end
+    end
+    if raidPanels[fullKey] then
+        raidPanels[fullKey]:Show()
+    end
+    if raidMechButtons[fullKey] then
+        raidMechButtons[fullKey].bg:SetColorTexture(0.3, 0.3, 0.5, 0.9)
+        raidMechButtons[fullKey].text:SetTextColor(1, 1, 1)
+    end
+    activeRaidPanel = fullKey
+end
+
+function PC:SelectDebugPanel(name)
+    for panelName, panel in pairs(debugPanels) do
+        panel:Hide()
+        debugEntries[panelName].bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+        debugEntries[panelName].text:SetTextColor(0.6, 0.6, 0.6)
+    end
+    debugPanels[name]:Show()
+    debugEntries[name].bg:SetColorTexture(0.3, 0.3, 0.5, 0.9)
+    debugEntries[name].text:SetTextColor(1, 1, 1)
+    activeDebugPanel = name
+
+    if name == "Note" then
+        PC:RefreshNoteDisplay()
+    elseif name == "Tracker" then
+        PC:ScanAuras()
+    elseif name == "Timeline" then
+        PC:RefreshTimelineLog()
+    end
+end
+
+function PC:SelectConfigPanel(name)
+    for panelName, panel in pairs(configPanels) do
+        panel:Hide()
+        configEntries[panelName].bg:SetColorTexture(0.2, 0.2, 0.2, 0.6)
+        configEntries[panelName].text:SetTextColor(0.6, 0.6, 0.6)
+    end
+    configPanels[name]:Show()
+    configEntries[name].bg:SetColorTexture(0.3, 0.3, 0.5, 0.9)
+    configEntries[name].text:SetTextColor(1, 1, 1)
+    activeConfigPanel = name
+end
+
 function PC:SelectTab(name)
     for tabName, content in pairs(tabContents) do
         content:Hide()
@@ -51,10 +309,18 @@ function PC:SelectTab(name)
     tabs[name].text:SetTextColor(1, 1, 1)
     activeTab = name
 
-    if name == "Note" then
-        PC:RefreshNoteDisplay()
-    elseif name == "Tracker" then
-        PC:ScanAuras()
+    if name == "Raid" then
+        if activeRaidPanel then
+            PC:SelectRaidPanel(activeRaidPanel)
+        end
+    elseif name == "Config" then
+        if activeConfigPanel then
+            PC:SelectConfigPanel(activeConfigPanel)
+        end
+    elseif name == "Debug" then
+        if activeDebugPanel then
+            PC:SelectDebugPanel(activeDebugPanel)
+        end
     end
 end
 
@@ -64,7 +330,7 @@ end
 
 function PC:CreateMainWindow()
     local frame = CreateFrame("Frame", "PcRaidToolsMain", UIParent, "BackdropTemplate")
-    frame:SetSize(380, 500)
+    frame:SetSize(620, 550)
     frame:SetPoint("CENTER")
     frame:SetFrameStrata("MEDIUM")
     frame:SetClampedToScreen(true)
@@ -88,7 +354,7 @@ function PC:CreateMainWindow()
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOP", 0, -10)
-    title:SetText("|cff00ccffPcRaidTools|r")
+    title:SetText("|cff00ccffPcRaidTools|r - v" .. PC.VERSION)
 
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
@@ -96,32 +362,50 @@ function PC:CreateMainWindow()
     tinsert(UISpecialFrames, "PcRaidToolsMain")
 
     -- Tabs
-    CreateTab(frame, "Config", 1)
-    CreateTab(frame, "Tracker", 2)
-    CreateTab(frame, "Note", 3)
-    CreateTab(frame, "Glow", 4)
+    CreateTab(frame, "Raid", 1)
+    CreateTab(frame, "Config", 2)
+    CreateTab(frame, "Debug", 3)
 
     -- Tab content containers
+    tabContents["Raid"] = CreateTabContent(frame)
     tabContents["Config"] = CreateTabContent(frame)
-    tabContents["Tracker"] = CreateTabContent(frame)
-    tabContents["Note"] = CreateTabContent(frame)
-    tabContents["Glow"] = CreateTabContent(frame)
+    tabContents["Debug"] = CreateTabContent(frame)
 
-    -- Build each tab's content
-    self:BuildConfigTab(tabContents["Config"])
-    self:BuildTrackerTab(tabContents["Tracker"])
-    self:BuildNoteTab(tabContents["Note"])
-    self:BuildGlowTab(tabContents["Glow"])
+    -- Build Raid tab with boss hierarchy sidebar
+    CreateRaidSidebarLayout(tabContents["Raid"])
+    self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
+    self:BuildFeatherPanel(raidPanels["Beloren.Feather"])
+    self:BuildExplosionPanel(raidPanels["Cosmos.Explosion"])
+    self:BuildMechanicPanel(raidPanels["Cosmos.Immune"], "Cosmos.Immune", "Immune Timer")
+
+    -- Build Config tab with sidebar (Text, Bar templates)
+    CreateSidebarLayout(tabContents["Config"], { "Text", "Bar" }, configEntries, configPanels, function(name)
+        PC:SelectConfigPanel(name)
+    end)
+    self:BuildTextTemplatePanel(configPanels["Text"])
+    self:BuildBarTemplatePanel(configPanels["Bar"])
+
+    -- Build Debug tab with sidebar
+    CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow", "Timeline" }, debugEntries, debugPanels, function(name)
+        PC:SelectDebugPanel(name)
+    end)
+    self:BuildTrackerTab(debugPanels["Tracker"])
+    self:BuildNoteTab(debugPanels["Note"])
+    self:BuildGlowTab(debugPanels["Glow"])
+    self:BuildTimelineDebugPanel(debugPanels["Timeline"])
 
     frame:Hide()
     self.mainWindow = frame
 
-    -- Default to Config tab
-    self:SelectTab("Config")
+    -- Default selections
+    self:SelectRaidPanel("Vanguard.Dispel")
+    self:SelectConfigPanel("Text")
+    self:SelectDebugPanel("Tracker")
+    self:SelectTab("Raid")
 end
 
 ----------------------------------------
--- Config Tab
+-- Dispel Settings Panel (formerly Config Tab)
 ----------------------------------------
 
 PC.ttsEnabled = true
@@ -145,34 +429,168 @@ local function CreateSlider(parent, label, min, max, step, initial, x, y, onChan
     return slider
 end
 
-function PC:BuildConfigTab(parent)
+-- Helper: creates a clickable color swatch that opens WoW's color picker
+local function CreateColorSwatch(parent, label, initialColor, x, y, onChange)
+    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    colorLabel:SetPoint("TOPLEFT", x, y)
+    colorLabel:SetText(label .. ":")
+
+    local swatch = CreateFrame("Button", nil, parent)
+    swatch:SetSize(22, 22)
+    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
+
+    swatch.tex = swatch:CreateTexture(nil, "ARTWORK")
+    swatch.tex:SetAllPoints()
+    swatch.tex:SetColorTexture(initialColor.r, initialColor.g, initialColor.b)
+
+    swatch.border = swatch:CreateTexture(nil, "OVERLAY")
+    swatch.border:SetPoint("TOPLEFT", -1, 1)
+    swatch.border:SetPoint("BOTTOMRIGHT", 1, -1)
+    swatch.border:SetColorTexture(0.5, 0.5, 0.5, 1)
+    swatch.tex:SetDrawLayer("OVERLAY", 1)
+
+    swatch:SetScript("OnClick", function()
+        local prev = { r = initialColor.r, g = initialColor.g, b = initialColor.b }
+        ColorPickerFrame:SetupColorPickerAndShow({
+            r = initialColor.r,
+            g = initialColor.g,
+            b = initialColor.b,
+            swatchFunc = function()
+                local r, g, b = ColorPickerFrame:GetColorRGB()
+                initialColor.r = r
+                initialColor.g = g
+                initialColor.b = b
+                swatch.tex:SetColorTexture(r, g, b)
+                onChange(initialColor)
+            end,
+            cancelFunc = function()
+                initialColor.r = prev.r
+                initialColor.g = prev.g
+                initialColor.b = prev.b
+                swatch.tex:SetColorTexture(prev.r, prev.g, prev.b)
+                onChange(initialColor)
+            end,
+        })
+    end)
+
+    return swatch
+end
+
+-- Available fonts
+local fontList = {
+    { label = "Default",    path = "Fonts\\FRIZQT__.TTF" },
+    { label = "Morpheus",   path = "Fonts\\MORPHEUS.TTF" },
+    { label = "Arial",      path = "Fonts\\ARIALN.TTF" },
+    { label = "Skurri",     path = "Fonts\\skurri.TTF" },
+}
+
+-- Helper: creates font dropdown with preview
+local function CreateFontPicker(parent, label, initialFont, x, y, onChange)
+    local fontLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    fontLabel:SetPoint("TOPLEFT", x, y)
+    fontLabel:SetText(label .. ":")
+
+    local selected = initialFont
+
+    local preview = parent:CreateFontString(nil, "OVERLAY")
+    preview:SetPoint("TOPLEFT", x + 200, y)
+    preview:SetFont(initialFont, 14, "OUTLINE")
+    preview:SetText("AaBb123")
+
+    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+    dropdown:SetPoint("LEFT", fontLabel, "RIGHT", 2, -2)
+    dropdown:SetWidth(130)
+
+    dropdown:SetupMenu(function(_, rootDescription)
+        for _, f in ipairs(fontList) do
+            rootDescription:CreateRadio(f.label, function()
+                return selected == f.path
+            end, function()
+                selected = f.path
+                preview:SetFont(f.path, 14, "OUTLINE")
+                onChange(f.path)
+            end, f.path)
+        end
+    end)
+
+    return dropdown
+end
+
+-- Available bar textures
+local barTextureList = {
+    { label = "Default",    path = "Interface\\TargetingFrame\\UI-StatusBar" },
+    { label = "Smooth",     path = "Interface\\RaidFrame\\Raid-Bar-Hp-Fill" },
+    { label = "Flat",       path = "Interface\\Buttons\\WHITE8X8" },
+    { label = "Blizzard",   path = "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar" },
+}
+
+-- Helper: creates bar texture dropdown with preview
+local function CreateTexturePicker(parent, label, initialTexture, x, y, onChange)
+    local texLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    texLabel:SetPoint("TOPLEFT", x, y)
+    texLabel:SetText(label .. ":")
+
+    local selected = initialTexture
+
+    local preview = CreateFrame("StatusBar", nil, parent)
+    preview:SetSize(80, 14)
+    preview:SetPoint("TOPLEFT", x + 200, y - 2)
+    preview:SetStatusBarTexture(initialTexture)
+    preview:SetStatusBarColor(0.9, 0.4, 0.1)
+    preview:SetMinMaxValues(0, 1)
+    preview:SetValue(0.7)
+
+    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+    dropdown:SetPoint("LEFT", texLabel, "RIGHT", 2, -2)
+    dropdown:SetWidth(130)
+
+    dropdown:SetupMenu(function(_, rootDescription)
+        for _, t in ipairs(barTextureList) do
+            rootDescription:CreateRadio(t.label, function()
+                return selected == t.path
+            end, function()
+                selected = t.path
+                preview:SetStatusBarTexture(t.path)
+                onChange(t.path)
+            end, t.path)
+        end
+    end)
+
+    return dropdown
+end
+
+function PC:BuildDispelSettingsPanel(parent)
+    local y = 0
+
     local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    header:SetPoint("TOPLEFT", 0, 0)
-    header:SetText("Settings")
+    header:SetPoint("TOPLEFT", 0, y)
+    header:SetText("Dispel Settings")
+    y = y - 28
 
     -- TTS checkbox
     local ttsCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-    ttsCheck:SetPoint("TOPLEFT", 0, -24)
+    ttsCheck:SetPoint("TOPLEFT", 0, y)
     ttsCheck:SetChecked(PC.ttsEnabled)
     ttsCheck:SetScript("OnClick", function(self)
         PC.ttsEnabled = self:GetChecked()
     end)
-
     local ttsLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     ttsLabel:SetPoint("LEFT", ttsCheck, "RIGHT", 4, 0)
     ttsLabel:SetText("TTS announce on dispel glow")
+    y = y - 30
 
     -- Glow Style
     local styleLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    styleLabel:SetPoint("TOPLEFT", 0, -58)
+    styleLabel:SetPoint("TOPLEFT", 0, y)
     styleLabel:SetText("Glow Style:")
+    y = y - 18
 
     local styles = { "solid", "pulse", "thick" }
     local styleButtons = {}
     for i, style in ipairs(styles) do
         local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
         btn:SetSize(70, 20)
-        btn:SetPoint("TOPLEFT", (i - 1) * 74, -74)
+        btn:SetPoint("TOPLEFT", (i - 1) * 74, y)
         btn:SetText(style:sub(1,1):upper() .. style:sub(2))
         btn:SetScript("OnClick", function()
             PC.glowStyle = style
@@ -184,48 +602,29 @@ function PC:BuildConfigTab(parent)
         btn:SetAlpha(style == PC.glowStyle and 1 or 0.5)
         styleButtons[i] = btn
     end
+    y = y - 28
 
     -- Glow Size
-    CreateSlider(parent, "Size", 1, 8, 1, PC.glowSize, 0, -108, function(val)
+    CreateSlider(parent, "Size", 1, 8, 1, PC.glowSize, 0, y, function(val)
         PC.glowSize = val
     end)
+    y = y - 38
 
-    -- Color preview swatch
-    local colorLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    colorLabel:SetPoint("TOPLEFT", 0, -142)
-    colorLabel:SetText("Glow Color:")
-
-    local swatch = parent:CreateTexture(nil, "ARTWORK")
-    swatch:SetSize(20, 20)
-    swatch:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
-    swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
-
-    -- R slider
-    local rSlider = CreateSlider(parent, "R", 0, 1, 0.05, PC.glowColor.r, 0, -170, function(val)
-        PC.glowColor.r = val
-        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
+    -- Glow Color
+    CreateColorSwatch(parent, "Glow Color", PC.glowColor, 0, y, function(c)
+        PC.glowColor = c
     end)
-
-    -- G slider
-    local gSlider = CreateSlider(parent, "G", 0, 1, 0.05, PC.glowColor.g, 0, -206, function(val)
-        PC.glowColor.g = val
-        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
-    end)
-
-    -- B slider
-    local bSlider = CreateSlider(parent, "B", 0, 1, 0.05, PC.glowColor.b, 0, -242, function(val)
-        PC.glowColor.b = val
-        swatch:SetColorTexture(PC.glowColor.r, PC.glowColor.g, PC.glowColor.b)
-    end)
+    y = y - 32
 
     -- Test glow buttons
     local testStatus = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    testStatus:SetPoint("TOPLEFT", 0, -272)
+    testStatus:SetPoint("TOPLEFT", 0, y)
     testStatus:SetText("")
+    y = y - 16
 
     local testOnBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     testOnBtn:SetSize(70, 22)
-    testOnBtn:SetPoint("TOPLEFT", 0, -286)
+    testOnBtn:SetPoint("TOPLEFT", 0, y)
     testOnBtn:SetText("Test On")
     testOnBtn:SetScript("OnClick", function()
         local myName = UnitName("player")
@@ -249,7 +648,213 @@ function PC:BuildConfigTab(parent)
 end
 
 ----------------------------------------
--- Tracker Tab
+-- Placeholder Panel (for mechanics not yet implemented)
+----------------------------------------
+
+function PC:BuildPlaceholderPanel(parent, mechName)
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, 0)
+    header:SetText(mechName .. " Settings")
+
+    local placeholder = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    placeholder:SetPoint("TOPLEFT", 0, -30)
+    placeholder:SetText("|cff888888Coming soon.|r")
+end
+
+----------------------------------------
+-- Explosion Panel (Cosmos)
+----------------------------------------
+
+function PC:BuildExplosionPanel(parent)
+    self:BuildMechanicPanel(parent, "Cosmos.Explosion", "Void Expulsion Timers")
+end
+
+-- Generic mechanic panel (enable/disable + trigger info + test)
+function PC:BuildMechanicPanel(parent, ruleKey, title)
+    local rule = self.bossTimerRules[ruleKey]
+    if not rule then return end
+    local y = 0
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, y)
+    header:SetText(title)
+    y = y - 28
+
+    -- Enable checkbox
+    local enableCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    enableCheck:SetPoint("TOPLEFT", 0, y)
+    enableCheck:SetChecked(rule.enabled)
+    enableCheck:SetScript("OnClick", function(self)
+        rule.enabled = self:GetChecked()
+    end)
+    local enableLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    enableLabel:SetPoint("LEFT", enableCheck, "RIGHT", 4, 0)
+    enableLabel:SetText("Enabled")
+    y = y - 30
+
+    -- Trigger info
+    for _, trigger in ipairs(rule.triggers) do
+        local info = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        info:SetPoint("TOPLEFT", 0, y)
+        if trigger.startAt > 0 then
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts at " .. trigger.startAt .. "s remaining")
+        elseif trigger.startAt < 0 then
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts " .. math.abs(trigger.startAt) .. "s after timeline ends")
+        else
+            info:SetText("|cffffcc00" .. trigger.type:upper() .. "|r  \"" .. trigger.label .. "\"  " .. trigger.duration .. "s, starts when timeline ends")
+        end
+        y = y - 20
+    end
+    y = y - 8
+
+    -- Test / Clear
+    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testBtn:SetSize(80, 22)
+    testBtn:SetPoint("TOPLEFT", 0, y)
+    testBtn:SetText("Test")
+    testBtn:SetScript("OnClick", function()
+        PC:TestBossTimer(ruleKey)
+    end)
+
+    local clearBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    clearBtn:SetSize(80, 22)
+    clearBtn:SetPoint("LEFT", testBtn, "RIGHT", 8, 0)
+    clearBtn:SetText("Clear")
+    clearBtn:SetScript("OnClick", function()
+        PC:ClearBossTimers()
+    end)
+end
+
+----------------------------------------
+-- Belo'ren Feather Panel
+----------------------------------------
+
+function PC:BuildFeatherPanel(parent)
+    local y = 0
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, y)
+    header:SetText("Feather Indicator")
+    y = y - 28
+
+    local desc = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    desc:SetPoint("TOPLEFT", 0, y)
+    desc:SetText("Shows Light Feather or Void Feather debuff icon on your screen.")
+    y = y - 20
+
+    local desc2 = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    desc2:SetPoint("TOPLEFT", 0, y)
+    desc2:SetText("|cffaaaaaaPosition and size are configured via Edit Mode (Esc > Edit Mode).|r")
+    y = y - 30
+
+    -- Test button
+    local testBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    testBtn:SetSize(80, 22)
+    testBtn:SetPoint("TOPLEFT", 0, y)
+    testBtn:SetText("Test")
+    testBtn:SetScript("OnClick", function()
+        PC:TestFeatherIndicator()
+    end)
+
+    local testLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    testLabel:SetPoint("LEFT", testBtn, "RIGHT", 8, 0)
+    testLabel:SetText("|cffaaaaaaShows indicator for 3 seconds|r")
+end
+
+----------------------------------------
+-- Timer Template Panels (Config tab)
+----------------------------------------
+
+function PC:BuildTextTemplatePanel(parent)
+    local tmpl = self:GetTimerTemplate("text")
+    local y = 0
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, y)
+    header:SetText("Text Timer")
+
+    local anchorBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    anchorBtn:SetSize(120, 20)
+    anchorBtn:SetPoint("LEFT", header, "RIGHT", 12, 0)
+    anchorBtn:SetText("Toggle Anchors")
+    anchorBtn:SetScript("OnClick", function()
+        PC:ToggleTimerAnchors()
+    end)
+    y = y - 32
+
+    -- Font
+    CreateFontPicker(parent, "Font", tmpl.font or "Fonts\\FRIZQT__.TTF", 0, y, function(path)
+        PC:SaveTimerTemplateSetting("text", "font", path)
+    end)
+    y = y - 34
+
+    -- Font Size
+    CreateSlider(parent, "Font Size", 12, 48, 1, tmpl.fontSize, 0, y, function(val)
+        PC:SaveTimerTemplateSetting("text", "fontSize", val)
+    end)
+    y = y - 40
+
+    -- Font Color
+    CreateColorSwatch(parent, "Font Color", tmpl.fontColor, 0, y, function(c)
+        PC:SaveTimerTemplateSetting("text", "fontColor", c)
+    end)
+end
+
+function PC:BuildBarTemplatePanel(parent)
+    local tmpl = self:GetTimerTemplate("bar")
+    local y = 0
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, y)
+    header:SetText("Bar Timer")
+
+    local anchorBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    anchorBtn:SetSize(120, 20)
+    anchorBtn:SetPoint("LEFT", header, "RIGHT", 12, 0)
+    anchorBtn:SetText("Toggle Anchors")
+    anchorBtn:SetScript("OnClick", function()
+        PC:ToggleTimerAnchors()
+    end)
+    y = y - 32
+
+    -- Width
+    CreateSlider(parent, "Width", 150, 400, 5, tmpl.width, 0, y, function(val)
+        PC:SaveTimerTemplateSetting("bar", "width", val)
+    end)
+    y = y - 40
+
+    -- Height
+    CreateSlider(parent, "Height", 14, 40, 1, tmpl.height, 0, y, function(val)
+        PC:SaveTimerTemplateSetting("bar", "height", val)
+    end)
+    y = y - 40
+
+    -- Texture
+    CreateTexturePicker(parent, "Texture", tmpl.barTexture or "Interface\\TargetingFrame\\UI-StatusBar", 0, y, function(path)
+        PC:SaveTimerTemplateSetting("bar", "barTexture", path)
+    end)
+    y = y - 34
+
+    -- Font
+    CreateFontPicker(parent, "Font", tmpl.font or "Fonts\\FRIZQT__.TTF", 0, y, function(path)
+        PC:SaveTimerTemplateSetting("bar", "font", path)
+    end)
+    y = y - 34
+
+    -- Font Size
+    CreateSlider(parent, "Font Size", 8, 24, 1, tmpl.fontSize, 0, y, function(val)
+        PC:SaveTimerTemplateSetting("bar", "fontSize", val)
+    end)
+    y = y - 40
+
+    -- Bar Color
+    CreateColorSwatch(parent, "Bar Color", tmpl.barColor, 0, y, function(c)
+        PC:SaveTimerTemplateSetting("bar", "barColor", c)
+    end)
+end
+
+----------------------------------------
+-- Tracker Panel
 ----------------------------------------
 
 function PC:BuildTrackerTab(parent)
@@ -320,14 +925,14 @@ function PC:BuildTrackerTab(parent)
     scrollFrame:SetPoint("BOTTOMRIGHT", -18, 0)
 
     local scrollChild = CreateFrame("Frame")
-    scrollChild:SetSize(280, 1)
+    scrollChild:SetSize(440, 1)
     scrollFrame:SetScrollChild(scrollChild)
 
     self.scrollChild = scrollChild
 end
 
 ----------------------------------------
--- Note Tab
+-- Note Panel
 ----------------------------------------
 
 function PC:BuildNoteTab(parent)
@@ -357,16 +962,16 @@ function PC:BuildNoteTab(parent)
 
     local parsedScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
     parsedScroll:SetPoint("TOPLEFT", 0, -60)
-    parsedScroll:SetSize(150, 185)
+    parsedScroll:SetSize(200, 185)
 
     local parsedChild = CreateFrame("Frame")
-    parsedChild:SetSize(135, 1)
+    parsedChild:SetSize(185, 1)
     parsedScroll:SetScrollChild(parsedChild)
     self.parsedChild = parsedChild
 
     -- Right column: Raid roster
     local rosterHeader = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    rosterHeader:SetPoint("TOPLEFT", 165, -44)
+    rosterHeader:SetPoint("TOPLEFT", 220, -44)
     rosterHeader:SetText("Raid Roster:")
 
     self.rosterCountText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -374,11 +979,11 @@ function PC:BuildNoteTab(parent)
     self.rosterCountText:SetText("")
 
     local rosterScroll = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
-    rosterScroll:SetPoint("TOPLEFT", 165, -60)
-    rosterScroll:SetSize(150, 185)
+    rosterScroll:SetPoint("TOPLEFT", 220, -60)
+    rosterScroll:SetSize(200, 185)
 
     local rosterChild = CreateFrame("Frame")
-    rosterChild:SetSize(135, 1)
+    rosterChild:SetSize(185, 1)
     rosterScroll:SetScrollChild(rosterChild)
     self.rosterChild = rosterChild
 
@@ -395,7 +1000,7 @@ function PC:BuildNoteTab(parent)
     editBox:SetMultiLine(true)
     editBox:SetAutoFocus(false)
     editBox:SetFontObject(GameFontHighlightSmall)
-    editBox:SetWidth(280)
+    editBox:SetWidth(440)
     editBox:SetText("")
     editBox:EnableMouse(true)
     editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -423,7 +1028,7 @@ local function GetOrCreateNoteRow(parent, index)
         return parent.rows[index]
     end
 
-    local parentWidth = parent:GetWidth() or 135
+    local parentWidth = parent:GetWidth() or 185
     local row = CreateFrame("Frame", nil, parent)
     row:SetSize(parentWidth, NOTE_ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -((index - 1) * NOTE_ROW_HEIGHT))
@@ -640,7 +1245,7 @@ function PC:RefreshDispelStatus()
 end
 
 ----------------------------------------
--- Glow Tab
+-- Glow Panel
 ----------------------------------------
 
 function PC:BuildGlowTab(parent)
@@ -704,6 +1309,175 @@ function PC:BuildGlowTab(parent)
 end
 
 ----------------------------------------
+-- Timeline Debug Panel
+----------------------------------------
+
+local TIMELINE_ROW_HEIGHT = 16
+
+function PC:BuildTimelineDebugPanel(parent)
+    local y = 0
+
+    local header = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    header:SetPoint("TOPLEFT", 0, y)
+    header:SetText("Timeline Log")
+    y = y - 24
+
+    -- Toggle logging
+    local logCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    logCheck:SetPoint("TOPLEFT", 0, y)
+    logCheck:SetChecked(PC.timelineLogging)
+    logCheck:SetScript("OnClick", function(self)
+        PC.timelineLogging = self:GetChecked()
+        if PC.timelineLogging then
+            print("|cff00ccff[PcRaidTools]|r Timeline logging ON")
+        else
+            print("|cff00ccff[PcRaidTools]|r Timeline logging OFF")
+        end
+    end)
+    local logLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    logLabel:SetPoint("LEFT", logCheck, "RIGHT", 4, 0)
+    logLabel:SetText("Record timeline events")
+
+    -- Clear button
+    local clearBtn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    clearBtn:SetSize(60, 20)
+    clearBtn:SetPoint("LEFT", logLabel, "RIGHT", 12, 0)
+    clearBtn:SetText("Clear")
+    clearBtn:SetScript("OnClick", function()
+        PC.timelineLog = {}
+        PC:RefreshTimelineLog()
+    end)
+    y = y - 28
+
+    -- Filter checkbox
+    local filterCheck = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
+    filterCheck:SetPoint("TOPLEFT", 0, y)
+    filterCheck:SetChecked(PC.timelineFilterAddedRemoved or false)
+    filterCheck:SetScript("OnClick", function(self)
+        PC.timelineFilterAddedRemoved = self:GetChecked()
+        PC:RefreshTimelineLog()
+    end)
+    local filterLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    filterLabel:SetPoint("LEFT", filterCheck, "RIGHT", 4, 0)
+    filterLabel:SetText("Show only ADDED / REMOVED")
+    y = y - 28
+
+    -- Count display
+    local countText = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    countText:SetPoint("TOPLEFT", 0, y)
+    countText:SetText("")
+    self.timelineCountText = countText
+    y = y - 16
+
+    -- Scroll frame for log entries
+    local scrollFrame = CreateFrame("ScrollFrame", nil, parent, "UIPanelScrollFrameTemplate")
+    scrollFrame:SetPoint("TOPLEFT", 0, y)
+    scrollFrame:SetPoint("BOTTOMRIGHT", -18, 0)
+
+    local scrollChild = CreateFrame("Frame")
+    scrollChild:SetSize(440, 1)
+    scrollFrame:SetScrollChild(scrollChild)
+    self.timelineScrollChild = scrollChild
+    self.timelineRows = {}
+end
+
+local function GetOrCreateTimelineRow(parent, rows, index)
+    if rows[index] then return rows[index] end
+
+    local row = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row:SetJustifyH("LEFT")
+    row:SetWidth(440)
+    row:SetWordWrap(false)
+    rows[index] = row
+    return row
+end
+
+function PC:RefreshTimelineLog()
+    if not self.timelineScrollChild then return end
+    local scrollChild = self.timelineScrollChild
+    local rows = self.timelineRows
+
+    -- Hide existing
+    for _, row in pairs(rows) do
+        row:SetText("")
+    end
+
+    local log = self.timelineLog
+    if self.timelineCountText then
+        self.timelineCountText:SetText("|cffaaaaaa" .. #log .. " events logged|r")
+    end
+
+    local filterAddedRemoved = self.timelineFilterAddedRemoved
+    local startTime = log[1] and log[1].time or 0
+    local rowIndex = 0
+    for i, entry in ipairs(log) do
+        if filterAddedRemoved and entry.type ~= "ADDED" and entry.type ~= "REMOVED" then
+            -- skip filtered entries
+        else
+        rowIndex = rowIndex + 1
+        local row = GetOrCreateTimelineRow(scrollChild, rows, rowIndex)
+        row:SetPoint("TOPLEFT", 0, -((rowIndex - 1) * TIMELINE_ROW_HEIGHT))
+
+        local t = string.format("%7.1f", entry.time - startTime)
+        local line
+
+        if entry.type == "ADDED" then
+            local s = entry.secrets or {}
+            local cReal, cSecret = "|cff44ff44", "|cffff4444"
+            local function cv(val, isSecret, fmt)
+                local str = val and (fmt and string.format(fmt, val) or tostring(val)) or "?"
+                return (isSecret and cSecret or cReal) .. str .. "|r"
+            end
+            line = "|cff44ff44" .. t .. "s|r |cff00ccffADDED|r id=" .. cv(entry.id, s.id)
+                .. " dur=" .. cv(entry.duration, s.duration, "%.1f") .. "s"
+                .. " spell=" .. cv(entry.spellName, s.spellName) .. " (" .. cv(entry.spellID, s.spellID) .. ")"
+                .. " src=" .. cv(entry.source, s.source)
+        elseif entry.type == "MATCHED" then
+            line = "|cff44ff44" .. t .. "s|r |cff44ff44MATCHED|r id=" .. tostring(entry.id) .. " -> |cffffcc00" .. tostring(entry.extra) .. "|r"
+        elseif entry.type == "STATE" then
+            line = "|cff44ff44" .. t .. "s|r |cffff9900STATE|r id=" .. tostring(entry.id) .. " -> " .. tostring(entry.extra)
+        elseif entry.type == "REMOVED" then
+            line = "|cff44ff44" .. t .. "s|r |cff666666REMOVED|r id=" .. tostring(entry.id)
+        elseif entry.type == "ENCOUNTER_START" then
+            line = "|cff44ff44" .. t .. "s|r |cff00ff00=== ENCOUNTER START ===|r " .. tostring(entry.extra)
+        elseif entry.type == "ENCOUNTER_END" then
+            line = "|cff44ff44" .. t .. "s|r |cffff4444=== ENCOUNTER END ===|r " .. tostring(entry.extra)
+        elseif entry.type:find("^CAST_") then
+            local castType = entry.type:gsub("CAST_", "")
+            local color = castType == "START" and "|cffff66ff" or castType == "INTERRUPTED" and "|cff44ff44" or "|cff999999"
+            local s = entry.secrets or {}
+            local cReal, cSecret = "|cff44ff44", "|cffff4444"
+            local function cv(val, isSecret, fmt)
+                local str = val and (fmt and string.format(fmt, val) or tostring(val)) or "?"
+                return (isSecret and cSecret or cReal) .. str .. "|r"
+            end
+            if entry.castUnit then
+                line = "|cff44ff44" .. t .. "s|r " .. color .. "CAST " .. castType .. "|r "
+                    .. tostring(entry.castUnit) .. " spell=" .. cv(entry.spellName, s.spellName)
+                    .. " (" .. cv(entry.spellID, s.spellID) .. ")"
+                    .. " dur=" .. cv(entry.duration, s.duration, "%.1f") .. "s"
+                    .. " notInterrupt=" .. cv(entry.notInterruptible, s.notInterruptible)
+            else
+                -- Legacy format fallback
+                line = "|cff44ff44" .. t .. "s|r " .. color .. "CAST " .. castType .. "|r " .. tostring(entry.extra)
+            end
+        else
+            line = "|cff44ff44" .. t .. "s|r " .. tostring(entry.type) .. " id=" .. tostring(entry.id)
+        end
+
+        row:SetText(line)
+        end -- end filter else
+    end
+
+    -- Clear any leftover rows from previous refresh
+    for i = rowIndex + 1, #rows do
+        if rows[i] then rows[i]:SetText("") end
+    end
+
+    scrollChild:SetHeight(math.max(1, rowIndex * TIMELINE_ROW_HEIGHT))
+end
+
+----------------------------------------
 -- Roster Display
 ----------------------------------------
 
@@ -720,13 +1494,13 @@ local function GetOrCreateRow(parent, index)
     parent.rows = parent.rows or {}
 
     local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(280, ROW_HEIGHT)
+    row:SetSize(440, ROW_HEIGHT)
     row:SetPoint("TOPLEFT", 0, -((index - 1) * ROW_HEIGHT))
 
     row.name = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     row.name:SetPoint("LEFT", 4, 0)
     row.name:SetJustifyH("LEFT")
-    row.name:SetWidth(220)
+    row.name:SetWidth(380)
 
     row.indicator = row:CreateTexture(nil, "OVERLAY")
     row.indicator:SetSize(12, 12)
@@ -804,10 +1578,12 @@ end
 -- Refresh the display whenever the window is shown
 function PC:HookMainWindowShow()
     self.mainWindow:HookScript("OnShow", function()
-        if activeTab == "Tracker" then
-            PC:ScanAuras()
-        elseif activeTab == "Note" then
-            PC:RefreshNoteDisplay()
+        if activeTab == "Debug" then
+            if activeDebugPanel == "Tracker" then
+                PC:ScanAuras()
+            elseif activeDebugPanel == "Note" then
+                PC:RefreshNoteDisplay()
+            end
         end
     end)
 end
