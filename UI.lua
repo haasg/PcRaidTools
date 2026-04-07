@@ -325,7 +325,8 @@ function PC:CreateMainWindow()
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 12, -10)
-    title:SetText("PcRaidTools")
+    local version = C_AddOns.GetAddOnMetadata(addonName, "Version") or ""
+    title:SetText("PcRaidTools  |cff888888v" .. version .. "|r")
 
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
