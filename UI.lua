@@ -295,10 +295,6 @@ function PC:SelectTab(name)
         if activeRaidPanel then
             PC:SelectRaidPanel(activeRaidPanel)
         end
-    elseif name == "Config" then
-        if activeConfigPanel then
-            PC:SelectConfigPanel(activeConfigPanel)
-        end
     elseif name == "Debug" then
         if activeDebugPanel then
             PC:SelectDebugPanel(activeDebugPanel)
@@ -336,24 +332,15 @@ function PC:CreateMainWindow()
 
     -- Tabs
     CreateTab(frame, "Raid", 1)
-    CreateTab(frame, "Config", 2)
-    CreateTab(frame, "Debug", 3)
+    CreateTab(frame, "Debug", 2)
 
     tabContents["Raid"] = CreateTabContent(frame)
-    tabContents["Config"] = CreateTabContent(frame)
     tabContents["Debug"] = CreateTabContent(frame)
 
     -- Build Raid tab with boss hierarchy
     CreateRaidSidebarLayout(tabContents["Raid"])
     self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
     self:BuildFeatherPanel(raidPanels["Beloren.Feather"])
-
-    -- Build Config tab with sidebar
-    CreateSidebarLayout(tabContents["Config"], { "Text", "Bar" }, configEntries, configPanels, function(name)
-        PC:SelectConfigPanel(name)
-    end)
-    self:BuildTextTemplatePanel(configPanels["Text"])
-    self:BuildBarTemplatePanel(configPanels["Bar"])
 
     -- Build Debug tab with sidebar
     CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow", "Timeline", "Chat", "Encounter", "Buttons" }, debugEntries, debugPanels, function(name)
@@ -372,7 +359,6 @@ function PC:CreateMainWindow()
 
     -- Default selections
     self:SelectRaidPanel("Vanguard.Dispel")
-    self:SelectConfigPanel("Text")
     self:SelectDebugPanel("Tracker")
     self:SelectTab("Raid")
 end
