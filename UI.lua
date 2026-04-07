@@ -121,6 +121,13 @@ local raidBossData = {
             { key = "Feather", label = "Feather" },
         },
     },
+    {
+        key = "Lura",
+        label = "Lura",
+        mechanics = {
+            { key = "Matrix", label = "Matrix" },
+        },
+    },
 }
 
 local function LayoutRaidSidebar()
@@ -342,6 +349,7 @@ function PC:CreateMainWindow()
     CreateRaidSidebarLayout(tabContents["Raid"])
     self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
     self:BuildFeatherPanel(raidPanels["Beloren.Feather"])
+    self:BuildMatrixPanel(raidPanels["Lura.Matrix"])
 
     -- Build Debug tab with sidebar
     CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow", "Timeline", "Chat", "Encounter", "Buttons", "Version" }, debugEntries, debugPanels, function(name)
