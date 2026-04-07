@@ -14,8 +14,10 @@ DispelAssign.lua
 BossTimers.lua
 BelorenFeather.lua
 LuraMatrix.lua
+LuraMemory.lua
 UI_Raid.lua
 UI_RaidLuraMatrix.lua
+UI_RaidLuraMemory.lua
 UI_Config.lua
 UI_DebugTracker.lua
 UI_DebugNote.lua

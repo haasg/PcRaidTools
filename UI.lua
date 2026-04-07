@@ -126,6 +126,7 @@ local raidBossData = {
         label = "Lura",
         mechanics = {
             { key = "Matrix", label = "Matrix" },
+            { key = "Memory", label = "Memory" },
         },
     },
 }
@@ -350,6 +351,7 @@ function PC:CreateMainWindow()
     self:BuildDispelSettingsPanel(raidPanels["Vanguard.Dispel"])
     self:BuildFeatherPanel(raidPanels["Beloren.Feather"])
     self:BuildMatrixPanel(raidPanels["Lura.Matrix"])
+    self:BuildMemoryPanel(raidPanels["Lura.Memory"])
 
     -- Build Debug tab with sidebar
     CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow", "Timeline", "Chat", "Encounter", "Buttons", "Version" }, debugEntries, debugPanels, function(name)
