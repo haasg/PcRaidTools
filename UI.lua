@@ -325,8 +325,8 @@ function PC:CreateMainWindow()
 
     local title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     title:SetPoint("TOPLEFT", 12, -10)
-    local version = C_AddOns.GetAddOnMetadata(addonName, "Version") or ""
-    title:SetText("PcRaidTools  |cff888888v" .. version .. "|r")
+    title:SetText("PcRaidTools  |cff888888v" .. PC.VERSION .. "|r")
+    self.titleText = title
 
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     closeBtn:SetPoint("TOPRIGHT", -2, -2)
@@ -344,7 +344,7 @@ function PC:CreateMainWindow()
     self:BuildFeatherPanel(raidPanels["Beloren.Feather"])
 
     -- Build Debug tab with sidebar
-    CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow", "Timeline", "Chat", "Encounter", "Buttons" }, debugEntries, debugPanels, function(name)
+    CreateSidebarLayout(tabContents["Debug"], { "Tracker", "Note", "Glow", "Timeline", "Chat", "Encounter", "Buttons", "Version" }, debugEntries, debugPanels, function(name)
         PC:SelectDebugPanel(name)
     end)
     self:BuildTrackerTab(debugPanels["Tracker"])
@@ -354,6 +354,7 @@ function PC:CreateMainWindow()
     self:BuildChatDebugPanel(debugPanels["Chat"])
     self:BuildEncounterDebugPanel(debugPanels["Encounter"])
     self:BuildButtonsDebugPanel(debugPanels["Buttons"])
+    self:BuildVersionDebugPanel(debugPanels["Version"])
 
     frame:Hide()
     self.mainWindow = frame
@@ -382,5 +383,15 @@ function PC:ToggleMainWindow()
         self.mainWindow:Hide()
     else
         self.mainWindow:Show()
+        PC:BroadcastVersion()
+    end
+end
+
+function PC:UpdateTitleText()
+    if not self.titleText then return end
+    if self.isOutOfDate and self.newestVersion then
+        self.titleText:SetText("PcRaidTools  |cff888888v" .. self.VERSION .. "|r  |cffff4444Out of Date (v" .. self.newestVersion .. " available)|r")
+    else
+        self.titleText:SetText("PcRaidTools  |cff888888v" .. self.VERSION .. "|r")
     end
 end

@@ -6,6 +6,7 @@
 ## SavedVariables: PcRaidToolsDB
 
 Core.lua
+Comms.lua
 MRTNote.lua
 DebuffTracker.lua
 FrameGlow.lua
@@ -21,4 +22,5 @@ UI_DebugTimeline.lua
 UI_DebugChat.lua
 UI_DebugEncounter.lua
 UI_DebugButtons.lua
+UI_DebugVersion.lua
 UI.lua
