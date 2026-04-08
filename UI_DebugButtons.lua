@@ -19,12 +19,13 @@ function PC:BuildButtonsDebugPanel(parent)
 
     -- Create the 5 secure buttons (parented to UIParent so they persist)
     -- Raid target icons: 1=star, 2=circle, 3=diamond, 4=triangle, 5=moon, 6=square, 7=cross(x), 8=skull
+    local MEDIA = "Interface\\AddOns\\PcRaidTools\\Media\\"
     local buttonDefs = {
-        { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_2", message = "pc-circle",   color = {1.0, 0.5, 0.0} },
-        { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_4", message = "pc-triangle", color = {0.0, 0.8, 0.0} },
-        { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_3", message = "pc-diamond",  color = {0.6, 0.0, 0.8} },
-        { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_7", message = "pc-x",        color = {0.9, 0.1, 0.1} },
-        { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_6", message = "pc-t",        color = {0.2, 0.4, 1.0} },
+        { icon = MEDIA .. "cr", message = "pc-circle",   color = {1.0, 0.5, 0.0} },
+        { icon = MEDIA .. "tr", message = "pc-triangle", color = {0.0, 0.8, 0.0} },
+        { icon = MEDIA .. "d",  message = "pc-diamond",  color = {0.6, 0.0, 0.8} },
+        { icon = MEDIA .. "x",  message = "pc-x",        color = {0.9, 0.1, 0.1} },
+        { icon = MEDIA .. "t",  message = "pc-t",        color = {0.2, 0.4, 1.0} },
     }
 
     local BUTTON_SIZE = 40

@@ -9,12 +9,14 @@ local addonName, PC = ...
 -- and displays a sequence of 5 icons.
 ----------------------------------------
 
+local MEDIA = "Interface\\AddOns\\PcRaidTools\\Media\\"
+
 local SHAPE_DEFS = {
-    { message = "pc-circle",   icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_2", color = {1.0, 0.5, 0.0} },
-    { message = "pc-triangle", icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_4", color = {0.0, 0.8, 0.0} },
-    { message = "pc-diamond",  icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_3", color = {0.6, 0.0, 0.8} },
-    { message = "pc-x",        icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_7", color = {0.9, 0.1, 0.1} },
-    { message = "pc-t",        icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_6", color = {0.2, 0.4, 1.0} },
+    { message = "pc-circle",   icon = MEDIA .. "cr", color = {1.0, 0.5, 0.0} },
+    { message = "pc-triangle", icon = MEDIA .. "tr", color = {0.0, 0.8, 0.0} },
+    { message = "pc-diamond",  icon = MEDIA .. "d",  color = {0.6, 0.0, 0.8} },
+    { message = "pc-x",        icon = MEDIA .. "x",  color = {0.9, 0.1, 0.1} },
+    { message = "pc-t",        icon = MEDIA .. "t",  color = {0.2, 0.4, 1.0} },
 }
 
 -- Lookup message -> shape def
@@ -43,6 +45,7 @@ local function GetSettings()
         PcRaidToolsDB.luraMemory = {
             buttonPresser = false,
             memoryMap = true,
+
             buttonPoint = "CENTER",
             buttonX = 0,
             buttonY = -200,
@@ -102,8 +105,10 @@ end)
 -- Memory Game Map (display)
 ----------------------------------------
 
+local DISPLAY_SIZE = 200
+
 local displayAnchor = CreateFrame("Frame", "PcRTMemoryDisplay", UIParent)
-displayAnchor:SetSize(MAX_SEQUENCE * ICON_SIZE + (MAX_SEQUENCE - 1) * ICON_SPACING, ICON_SIZE + 20)
+displayAnchor:SetSize(DISPLAY_SIZE, DISPLAY_SIZE)
 displayAnchor:SetPoint("CENTER", 0, 150)
 displayAnchor:SetClampedToScreen(true)
 displayAnchor:Hide()
@@ -113,12 +118,44 @@ displayAnchor.bg = displayAnchor:CreateTexture(nil, "BACKGROUND")
 displayAnchor.bg:SetAllPoints()
 displayAnchor.bg:SetColorTexture(0, 0, 0, 0.5)
 
+-- Red circle in center
+local centerCircle = displayAnchor:CreateTexture(nil, "ARTWORK")
+centerCircle:SetSize(40, 40)
+centerCircle:SetPoint("CENTER", 0, 0)
+centerCircle:SetTexture("Interface\\COMMON\\Indicator-Red")
+centerCircle:SetAlpha(0.7)
+
+-- Pentagon positions (relative to center)
+-- Clockwise:         starts top-right, goes CW
+-- Counter-clockwise: starts top-left, goes CCW
+local SLOT_POSITIONS_CW = {
+    { x =  55, y =  55 },  -- 1: top right
+    { x =  70, y = -25 },  -- 2: bottom right
+    { x =   0, y = -65 },  -- 3: bottom center
+    { x = -70, y = -25 },  -- 4: bottom left
+    { x = -55, y =  55 },  -- 5: top left
+}
+local SLOT_POSITIONS_CCW = {
+    { x = -55, y =  55 },  -- 1: top left
+    { x = -70, y = -25 },  -- 2: bottom left
+    { x =   0, y = -65 },  -- 3: bottom center
+    { x =  70, y = -25 },  -- 4: bottom right
+    { x =  55, y =  55 },  -- 5: top right
+}
+
+local clockwise = true
+
+local function GetSlotPositions()
+    return clockwise and SLOT_POSITIONS_CW or SLOT_POSITIONS_CCW
+end
+
 -- Sequence icon slots
 local displaySlots = {}
 for i = 1, MAX_SEQUENCE do
+    local pos = GetSlotPositions()[i]
     local slot = CreateFrame("Frame", nil, displayAnchor)
     slot:SetSize(ICON_SIZE, ICON_SIZE)
-    slot:SetPoint("LEFT", (i - 1) * (ICON_SIZE + ICON_SPACING), 6)
+    slot:SetPoint("CENTER", displayAnchor, "CENTER", pos.x, pos.y)
 
     slot.bg = slot:CreateTexture(nil, "BACKGROUND")
     slot.bg:SetAllPoints()
@@ -129,17 +166,18 @@ for i = 1, MAX_SEQUENCE do
     slot.icon:SetPoint("BOTTOMRIGHT", -4, 4)
     slot.icon:Hide()
 
-    slot.number = slot:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    slot.number:SetPoint("BOTTOM", 0, -12)
+    slot.number = slot:CreateFontString(nil, "OVERLAY")
+    slot.number:SetFont("Fonts\\FRIZQT__.TTF", 14, "OUTLINE")
+    slot.number:SetPoint("TOP", slot, "TOP", 0, 14)
     slot.number:SetText(tostring(i))
-    slot.number:SetTextColor(0.6, 0.6, 0.6)
+    slot.number:SetTextColor(1, 1, 1)
 
     displaySlots[i] = slot
 end
 
 -- Timer bar
 local timerBar = CreateFrame("StatusBar", nil, displayAnchor)
-timerBar:SetSize(displayAnchor:GetWidth(), 4)
+timerBar:SetSize(DISPLAY_SIZE, 4)
 timerBar:SetPoint("BOTTOM", displayAnchor, "BOTTOM", 0, 0)
 timerBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
 timerBar:SetStatusBarColor(1, 0.8, 0)
@@ -154,6 +192,13 @@ displayAnchor:SetScript("OnDragStop", function(self)
     s.displayX = x
     s.displayY = y
 end)
+
+local function SlotBgColor(shape)
+    if shape then
+        return shape.color[1] * 0.15, shape.color[2] * 0.15, shape.color[3] * 0.15, 0.9
+    end
+    return 0.15, 0.15, 0.15, 0.8
+end
 
 ----------------------------------------
 -- Sequence State
@@ -185,12 +230,7 @@ local function UpdateDisplay()
         if shape then
             displaySlots[i].icon:SetTexture(shape.icon)
             displaySlots[i].icon:Show()
-            displaySlots[i].bg:SetColorTexture(
-                shape.color[1] * 0.15,
-                shape.color[2] * 0.15,
-                shape.color[3] * 0.15,
-                0.9
-            )
+            displaySlots[i].bg:SetColorTexture(SlotBgColor(shape))
         else
             displaySlots[i].icon:Hide()
             displaySlots[i].bg:SetColorTexture(0.15, 0.15, 0.15, 0.8)
@@ -262,6 +302,11 @@ initFrame:SetScript("OnEvent", function()
     -- Display position
     displayAnchor:ClearAllPoints()
     displayAnchor:SetPoint(s.displayPoint or "CENTER", UIParent, s.displayPoint or "CENTER", s.displayX or 0, s.displayY or 150)
+
+    -- Show buttons if enabled
+    if s.buttonPresser then
+        buttonAnchor:Show()
+    end
 end)
 
 ----------------------------------------
@@ -332,12 +377,7 @@ function PC:SetMemoryDisplayUnlocked(unlock)
         for i = 1, MAX_SEQUENCE do
             displaySlots[i].icon:SetTexture(SHAPE_DEFS[i].icon)
             displaySlots[i].icon:Show()
-            displaySlots[i].bg:SetColorTexture(
-                SHAPE_DEFS[i].color[1] * 0.15,
-                SHAPE_DEFS[i].color[2] * 0.15,
-                SHAPE_DEFS[i].color[3] * 0.15,
-                0.9
-            )
+            displaySlots[i].bg:SetColorTexture(SlotBgColor(SHAPE_DEFS[i]))
         end
         displayAnchor:Show()
     else
@@ -359,6 +399,19 @@ end
 
 function PC:IsMemoryDisplayUnlocked()
     return displayUnlocked
+end
+
+function PC:SetMemoryClockwise(cw)
+    clockwise = cw
+    local positions = GetSlotPositions()
+    for i = 1, MAX_SEQUENCE do
+        displaySlots[i]:ClearAllPoints()
+        displaySlots[i]:SetPoint("CENTER", displayAnchor, "CENTER", positions[i].x, positions[i].y)
+    end
+end
+
+function PC:IsMemoryClockwise()
+    return clockwise
 end
 
 function PC:TestMemorySequence()

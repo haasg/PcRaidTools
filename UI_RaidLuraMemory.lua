@@ -10,6 +10,7 @@ function PC:BuildMemoryPanel(parent)
         PcRaidToolsDB.luraMemory = {
             buttonPresser = false,
             memoryMap = true,
+
             buttonPoint = "CENTER",
             buttonX = 0,
             buttonY = -200,
