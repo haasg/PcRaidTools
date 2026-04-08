@@ -2,14 +2,29 @@
 ## Title: PcRaidTools
 ## Notes: A suite of tools for WoW raiding
 ## Author: Pc
-## Version: 0.2.4
+## Version: 0.2.5
 ## SavedVariables: PcRaidToolsDB
 
 Core.lua
+Comms.lua
 MRTNote.lua
 DebuffTracker.lua
 FrameGlow.lua
 DispelAssign.lua
 BossTimers.lua
 BelorenFeather.lua
+LuraMatrix.lua
+LuraMemory.lua
+UI_Raid.lua
+UI_RaidLuraMatrix.lua
+UI_RaidLuraMemory.lua
+UI_Config.lua
+UI_DebugTracker.lua
+UI_DebugNote.lua
+UI_DebugGlow.lua
+UI_DebugTimeline.lua
+UI_DebugChat.lua
+UI_DebugEncounter.lua
+UI_DebugButtons.lua
+UI_DebugVersion.lua
 UI.lua

@@ -9,12 +9,14 @@ local addonName, PC = ...
 ----------------------------------------
 
 local LIGHT_FEATHER = 1241162
+local BELOREN_ENCOUNTER_ID = 3182
 local DEFAULT_ICON_SIZE = 48
 local MAX_ICONS = 6
 local ICON_SPACING = 4
 
 local featherDebug = false
 local isUnlocked = false
+local inBelorenFight = false
 
 -- Tracked debuffs: [auraInstanceID] = iconIndex
 local activeDebuffs = {}
@@ -260,13 +262,20 @@ end
 
 local eventFrame = CreateFrame("Frame")
 eventFrame:RegisterEvent("UNIT_AURA")
+eventFrame:RegisterEvent("ENCOUNTER_START")
 eventFrame:RegisterEvent("ENCOUNTER_END")
 eventFrame:RegisterEvent("PLAYER_DEAD")
 eventFrame:SetScript("OnEvent", function(self, event, ...)
-    if event == "ENCOUNTER_END" or event == "PLAYER_DEAD" then
+    if event == "ENCOUNTER_START" then
+        local encounterID = ...
+        inBelorenFight = (encounterID == BELOREN_ENCOUNTER_ID)
+        return
+    elseif event == "ENCOUNTER_END" or event == "PLAYER_DEAD" then
+        inBelorenFight = false
         HideAll()
         return
     elseif event == "UNIT_AURA" then
+        if not inBelorenFight and not IsUnlocked() then return end
         if not IsEnabled() then return end
         local unit, updateInfo = ...
         if unit ~= "player" or not updateInfo then return end
